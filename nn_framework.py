@@ -39,7 +39,7 @@ def train_alg_mfc(nn_model, p0, pt, T, nt=50, n_sample=100, lr=0.005, n_iter=102
             inp = torch.cat([x, dt * t * torch.ones(n_sample, 1)], dim=1)
             v = nn_model(inp)
             p = kernel(x)
-            l = l + 0.5 * torch.linalg.norm(v, axis=1).pow(2) + 0.005 * torch.log(p)
+            l = l + 0.5 * torch.linalg.norm(v, axis=1).pow(2) + 0.001 * torch.log(p)
             e = me.sample([n_sample])
             x = x + v + e
             ############################
