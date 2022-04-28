@@ -86,8 +86,8 @@ def train_alg_mfc_ot(data, T, lr=0.001,
     start_loc = []
     end_loc = []
     for i in range(nt_data - 1):
-        data0 = data[data.time == t_data[i]][['UMAP_1', 'UMAP_2']].sample(n_ref, replace=True).to_numpy()
-        data1 = data[data.time == t_data[i + 1]][['UMAP_1', 'UMAP_2']].sample(n_ref, replace=True).to_numpy()
+        data0 = data[data.time == t_data[i]][['x', 'y']].sample(n_ref, replace=True).to_numpy()
+        data1 = data[data.time == t_data[i + 1]][['x', 'y']].sample(n_ref, replace=True).to_numpy()
         costm = ot.compute_dist(data0, data1, dim=2, single=False)
         start_loc.append(data0)
         reg_list = (100 - reg) * np.exp(-np.arange(100)) + reg
@@ -109,7 +109,7 @@ def train_alg_mfc_ot(data, T, lr=0.001,
     x_tensor = []
     
     for t in t_data:
-        x_tensor.append(torch.from_numpy(data[data.time == t][['UMAP_1','UMAP_2']].to_numpy()))
+        x_tensor.append(torch.from_numpy(data[data.time == t][['x','y']].to_numpy()))
         
     obj = []
     
@@ -117,7 +117,7 @@ def train_alg_mfc_ot(data, T, lr=0.001,
         
         l = torch.tensor(0.)
         
-        x = torch.from_numpy(x0.sample(n_sample, replace=True)[['UMAP_1','UMAP_2']].to_numpy())
+        x = torch.from_numpy(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
         ind_check = 1
             
         check = True
@@ -206,13 +206,13 @@ def train_alg_mfc_force(data, T, lr=0.001,
     x_tensor = []
     
     for t in t_data:
-        x_tensor.append(torch.from_numpy(data[data.time == t][['UMAP_1','UMAP_2']].to_numpy()))
+        x_tensor.append(torch.from_numpy(data[data.time == t][['x','y']].to_numpy()))
         
     obj = []
     
     for n in range(n_iter):
         
-        x = torch.from_numpy(x0.sample(n_sample, replace=True)[['UMAP_1','UMAP_2']].to_numpy())
+        x = torch.from_numpy(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
         ind_check = 1
         check = True
         l = torch.tensor(0.)
@@ -278,7 +278,7 @@ def train_alg_mfc_force(data, T, lr=0.001,
 def train_alg_mfc_soft(data, T, lr=0.001,
                        n_sample=100, n_iter=128, nt_grid=100, 
                        error_s1=1, error_s2=1,
-                       h=None,
+                       h=None, k=5, lock_dist=0.01,
                        r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1,
                        track=False):
     
@@ -298,13 +298,13 @@ def train_alg_mfc_soft(data, T, lr=0.001,
     
     # x_tensor = []    
     # for t in t_data:
-    #     x_tensor.append(torch.from_numpy(data[data.time == t][['UMAP_1','UMAP_2']].to_numpy()))
+    #     x_tensor.append(torch.from_numpy(data[data.time == t][['x','y']].to_numpy()))
         
     obj = []
     
     for n in range(n_iter):
         
-        x = torch.from_numpy(x0.sample(n_sample, replace=True)[['UMAP_1','UMAP_2']].to_numpy())
+        x = torch.from_numpy(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
         ind_check = 1
         check = True
         l = torch.tensor(0.)
@@ -322,19 +322,18 @@ def train_alg_mfc_soft(data, T, lr=0.001,
             l = l + r_ent_v * dt * (pvhat.log().mean())
             if check:
                 if tf == t_data[ind_check]:
-                    x_check = torch.from_numpy(data[data.time == tf][['UMAP_1','UMAP_2']].sample(n_sample).to_numpy())
-                    # x_support = torch.from_numpy(data.sample(1000)[['UMAP_1', 'UMAP_2']].to_numpy())
+                    x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
+                    # x_support = torch.from_numpy(data.sample(1000)[['x', 'y']].to_numpy())
                     c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
                     c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
                     c = c1.pow(2) + c2.pow(2)
                     # prop_in = torch.diag(1 / c.sum(axis=1)) @ c
-                    z = c.argsort(axis=1)
-                    ztr = c.argsort(axis=0)
                     p = kernel_pred(x_check, x, h=h)
                     l = l + r_kl * (phat.log() - p.log()).mean()
-                    l = l + r_lock * (torch.max(c.sqrt() * (z < 10) - 0.001, torch.tensor(0.))).sum(axis=1).mean()
-                    l = l + r_lock * (torch.max(c.sqrt() * (ztr < 10) - 0.001, torch.tensor(0.))).sum(axis=0).mean()
-                    # l = l - r_lock * torch.max(prop_in.log(), torch.tensor(-100)).sum(axis=1).mean()
+                    c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
+                    ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
+                    l = l + r_lock * (torch.max(c_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+                    l = l + r_lock * (torch.max(ctr_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
                     if tf == t_data[-1]:
                         check = False
                     ind_check += 1
@@ -360,7 +359,7 @@ def train_alg_mfc_soft(data, T, lr=0.001,
 def train_alg_mfc_soft_seg(data, T, lr=0.001,
                            n_sample=100, n_iter=128, nt_grid=100, n_seg=5,
                            error_s1=1, error_s2=1,
-                           h=None,
+                           h=None, k=5, lock_dist=0.01,
                            r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1, 
                            track=False):
     
@@ -402,11 +401,11 @@ def train_alg_mfc_soft_seg(data, T, lr=0.001,
         x_tensor = []
     
         for t in tsub:
-            x_tensor.append(torch.from_numpy(data[data.time == t][['UMAP_1','UMAP_2']].to_numpy()))
+            x_tensor.append(torch.from_numpy(data[data.time == t][['x','y']].to_numpy()))
         
         for n in range(n_iter):
             
-            x = torch.from_numpy(x0.sample(n_sample, replace=True)[['UMAP_1','UMAP_2']].to_numpy())
+            x = torch.from_numpy(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
             ind_check = 1
             check = True
             l = torch.tensor(0.)
@@ -430,11 +429,12 @@ def train_alg_mfc_soft_seg(data, T, lr=0.001,
                         c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
                         c = c1.pow(2) + c2.pow(2)
                         # prop_in = torch.diag(1 / c.sum(axis=1)) @ c
-                        z = c.argsort(axis=1)
                         p = kernel_pred(x_check, x, h=h)
                         l = l - r_kl * p.log().mean()
-                        l = l + r_lock * (torch.max(c.sqrt() * (z < 25) - 0.01, torch.tensor(0.))).sum(axis=1).mean()
-                        # l = l - r_lock * torch.max(prop_in.log(), torch.tensor(-100)).sum(axis=1).mean()
+                        c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
+                        ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
+                        l = l + r_lock * (torch.max(c_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+                        l = l + r_lock * (torch.max(ctr_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
                         if tf == tsub[-1]:
                             check = False
                         ind_check += 1
@@ -461,7 +461,7 @@ def train_alg_mfc_soft_seg(data, T, lr=0.001,
 def train_alg_mfc_fb_ot(data, lr=0.001,
                         n_sample=100, n_iter=128, nt_subgrid=10, 
                         error_s1=1, error_s2=1,
-                        h=None,
+                        h=None, k=5, lock_dist=0.01,
                         r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1,
                         reg=1, reg1=1, reg2=2,
                         track=False):
@@ -472,6 +472,7 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
     n_ref = n_sample * 3
     dirac = np.repeat(1, n_ref) / n_ref
     tmap = []
+    tmap_norm = []
     start_loc = []
     end_loc = []
     model_f = []
@@ -483,20 +484,22 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
     me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2), 
                                                                     torch.tensor(np.diag([error_s1, error_s2])).float())
     for i in range(nt_data - 1):
-        data0 = data[data.time == t_data[i]][['UMAP_1', 'UMAP_2']].sample(n_ref, replace=True).to_numpy()
-        data1 = data[data.time == t_data[i + 1]][['UMAP_1', 'UMAP_2']].sample(n_ref, replace=True).to_numpy()
+        data0 = data[data.time == t_data[i]][['x', 'y']].sample(n_ref, replace=True).to_numpy()
+        data1 = data[data.time == t_data[i + 1]][['x', 'y']].sample(n_ref, replace=True).to_numpy()
         costm = ot.compute_dist(data0, data1, dim=2, single=False)
         start_loc.append(data0)
+        end_loc.append(data1)
         reg_list = (100 - reg) * np.exp(-np.arange(100)) + reg
         # tmap_temp = ot.ot_unbalanced_log_stabilized(dirac, dirac, costm, reg, reg1, reg2, reg_list=reg_list)
         tmap_temp = ot.ot_balanced_log_stabilized(dirac, dirac, costm, reg, reg_list=reg_list)
         tmap.append(tmap_temp)
-        tmap_norm = tmap_temp.copy()
-        tmap_norm = np.diag(1 / tmap_norm.sum(axis=1)) @ tmap_norm
-        # end_loc.append(tmap_norm @ data1)
-        end_loc.append(data1[tmap_norm.argmax(axis=1)])
-        model_f.append(NeuralNetwork(3, 2, 128))
-        model_b.append(NeuralNetwork(3, 2, 128))
+        tmap_norm_temp = tmap_temp.copy()
+        tmap_norm_temp = np.diag(1 / tmap_norm_temp.sum(axis=1)) @ tmap_norm_temp
+        tmap_norm.append(tmap_norm_temp)
+        # end_loc.append(tmap_norm_temp @ data1)
+        # end_loc.append(data1[tmap_norm_temp.argmax(axis=1)])
+        model_f.append(NeuralNetwork(3, 2, 100))
+        model_b.append(NeuralNetwork(3, 2, 100))
         optimizer_f.append(torch.optim.Adam(model_f[i].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
         optimizer_b.append(torch.optim.Adam(model_b[i].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
         obj_f.append([])
@@ -511,7 +514,7 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
         zf = torch.tensor(data1)
         for n in range(n_iter):
             l = torch.tensor(0.)
-            x = torch.tensor(data[data.time == t_data[i]][['UMAP_1', 'UMAP_2']].sample(n_sample, replace=True).to_numpy())
+            x = torch.tensor(data[data.time == t_data[i]][['x', 'y']].sample(n_sample, replace=True).to_numpy())
             ### forward model
             for t in t_forward:
                 inp = torch.cat([x, (t - t0) * torch.ones(n_sample, 1) / (t1 - t0)], dim=1)
@@ -521,15 +524,16 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
                 phat = kernel(x, h=h)
                 l = l + r_v * v.pow(2).sum(axis=1).mean() * dt
                 l = l + r_ent * phat.log().mean() * dt
-            p = kernel_pred(zf, x, h=h)
-            l = l - r_kl * p.log().mean()
+            l = l - r_ent * phat.log().mean() * dt
+            # p = kernel_pred(zf, x, h=h)
+            # l = l + r_kl * (phat.log() - p.log()).mean()
             c1 = x[:, 0].reshape(-1, 1) - zf[:, 0]
             c2 = x[:, 1].reshape(-1, 1) - zf[:, 1]
             c = c1.pow(2) + c2.pow(2)
-            c_rank = c.argsort(axis=1)
-            ctr_rank = c.argsort(axis=0)
-            l = l + r_lock * (torch.max(c.sqrt() * (c_rank < 10) - 0.01, torch.tensor(0.))).sum(axis=1).mean()
-            l = l + r_lock * (torch.max(c.sqrt() * (ctr_rank < 10) - 0.01, torch.tensor(0.))).sum(axis=0).mean()
+            c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
+            # ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
+            l = l + r_lock * (torch.max(c_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+            # l = l + r_lock * (torch.max(ctr_lowk - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
             if np.isnan(float(l)) or np.isinf(float(l)):
                 raise ArithmeticError('encountered nan/inf at iteration ', str(int(n)) + ' forward time index ' + str(int(i)))
             if track:
@@ -539,7 +543,7 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
             optimizer_f[i].step()
             obj_f[i].append(float(l))
             ly = torch.tensor(0.)
-            y = torch.tensor(data[data.time == t_data[i + 1]][['UMAP_1', 'UMAP_2']].sample(n_sample, replace=True).to_numpy())
+            y = torch.tensor(data[data.time == t_data[i + 1]][['x', 'y']].sample(n_sample, replace=True).to_numpy())
             ### backward model
             for t in t_backward:
                 inp_y = torch.cat([y, (t - t0) * torch.ones(n_sample, 1) / (t1 - t0)], dim=1)
@@ -549,15 +553,16 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
                 phat_y = kernel(y, h=h)
                 ly = ly + r_v * v_y.pow(2).sum(axis=1).mean() * dt
                 ly = ly + r_ent * phat_y.log().mean() * dt
-            p_y = kernel_pred(z0, y, h=h)
-            ly = ly - r_kl * p_y.log().mean()
+            ly = ly - r_ent * phat_y.log().mean() * dt
+            # p_y = kernel_pred(z0, y, h=h)
+            # ly = ly + r_kl * (phat_y.log() - p_y.log()).mean()
             c1_y = y[:, 0].reshape(-1, 1) - z0[:, 0]
             c2_y = y[:, 1].reshape(-1, 1) - z0[:, 1]
             c_y = c1_y.pow(2) + c2_y.pow(2)
-            c_rank_y = c_y.argsort(axis=1)
-            ctr_rank_y = c_y.argsort(axis=0)
-            l = l + r_lock * (torch.max(c_y.sqrt() * (c_rank_y < 10) - 0.01, torch.tensor(0.))).sum(axis=1).mean()
-            l = l + r_lock * (torch.max(c_y.sqrt() * (ctr_rank_y < 10) - 0.01, torch.tensor(0.))).sum(axis=0).mean()
+            c_y_lowk, c_y_rank = c_y.topk(k=k, dim=1, largest=False)
+            # ctr_y_lowk, ctr_y_rank = c_y.topk(k=k, dim=0, largest=False)
+            l = l + r_lock * (torch.max(c_y_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+            # l = l + r_lock * (torch.max(ctr_y_lowk - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
             if np.isnan(float(ly)) or np.isinf(float(ly)):
                 raise ArithmeticError('encountered nan/inf at iteration ', str(int(n)) + ' backward time index ' + str(int(i)))
             if track:
@@ -574,6 +579,7 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
             'obj_f': obj_f,
             'obj_b': obj_b,
             'tmap': tmap,
+            'tmap_norm': tmap_norm,
             't_data': t_data,
             'x0': start_loc,
             'x1': end_loc}
@@ -766,11 +772,12 @@ def sim_path_soft_seg(model, x0, T, bound, nt=100, s1=1, s2=1, plot=False):
     return data
 
 
-def sim_path_fb_ot(framework, x0, nt=100, s1=1, s2=1, plot=False):
+def sim_path_fb_ot(framework, x0, nt=100, s1=1, s2=1, h=None, plot=False):
     
     model_f = framework['model_f']
     model_b = framework['model_b']
     t_data = framework['t_data']
+    tmap_norm = framework['tmap_norm']
     start_loc = framework['x0']
     end_loc = framework['x1']
     T = np.max(t_data)
@@ -785,7 +792,6 @@ def sim_path_fb_ot(framework, x0, nt=100, s1=1, s2=1, plot=False):
     n_sample = x.shape[0]
     mod_ind = 0
     ind_check = 0
-    x_start = torch.tensor(x0)
     for t_ind in range(nt_grid - 1):
         ti = t_grid[t_ind]
         tf = t_grid[t_ind + 1]
@@ -794,10 +800,21 @@ def sim_path_fb_ot(framework, x0, nt=100, s1=1, s2=1, plot=False):
             data_temp_x = np.zeros((0, 2))
             t_start = t_data[ind_check]
             t_end = t_data[ind_check + 1]
-            start = torch.tensor(start_loc[ind_check])
-            end = torch.tensor(end_loc[ind_check])
-            cdist = tensor_cost(x_start, start)
+            start_ref = start_loc[ind_check]
+            end_ref = end_loc[ind_check]
+            n_start = start_ref.shape[0]
+            n_end = end_ref.shape[0]
+            start = torch.tensor(start_ref)
+            end = np.zeros(start.shape)
+            for j in range(n_start):
+                dest = np.random.choice(np.arange(n_end),p=tmap_norm[ind_check][j, :])
+                end[j, :] = end_ref[dest, :]
+            end = torch.tensor(end)
+            cdist = tensor_cost(x, start)
             end_ind = cdist.argmin(axis=1)
+            new_start = end[end_ind]
+            # kw = kernel_weight(x, start, h=h)
+            # new_start = kw @ end
             ind_check += 1
         dt = (tf - ti) / (t_end - t_start)
         inp = torch.cat([x, (ti - t_start) * torch.ones(n_sample, 1) / (t_end - t_start)], dim=1)
@@ -808,8 +825,8 @@ def sim_path_fb_ot(framework, x0, nt=100, s1=1, s2=1, plot=False):
         ts.append(tf)
         if tf == t_end:
             t1_ind = t_ind + 1
-            x = end[end_ind]
-            y = end[end_ind]
+            x = new_start
+            y = new_start
             data_temp_y = np.zeros((0, 2))
             for ty in np.arange(t1_ind, t0_ind, -1):
                 data_temp_y = np.vstack((y.detach().numpy(), data_temp_y))
