@@ -585,11 +585,14 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
             'x1': end_loc}
 
 
-def sim_path_ot(res, x0, T, nt=100, s1=1, s2=1, plot=False):  
+def sim_path_ot(res, x0, T, nt=100, t_check=None, s1=1, s2=1, plot=False):  
     
     t_data = res['t_data']
     t_grid = np.linspace(0, T, nt)
-    t_grid = np.unique(np.concatenate((t_data, t_grid), axis=None))
+    if t_check is None:
+        t_grid = np.unique(np.concatenate((t_data, t_grid), axis=None))
+    else:
+        t_grid = np.unique(np.concatenate((t_data, t_grid, t_check), axis=None))
     t_grid.sort()
     nt_grid = t_grid.shape[0]
     nt_data = t_data.shape[0]
@@ -641,17 +644,18 @@ def sim_path_ot(res, x0, T, nt=100, s1=1, s2=1, plot=False):
         x = x + v * dt + np.sqrt(dt) * e
         data = np.vstack((data, x.detach().numpy()))
         ts.append(tf)
+    data = pd.DataFrame(data, columns=['x', 'y'])
+    data['time'] = np.repeat(ts, n_sample)
     if plot:
-        data = pd.DataFrame(data, columns=['x', 'y'])
-        data['time'] = np.repeat(ts, n_sample)
         data.plot.scatter(x='x', y='y', c='time', s=1, cmap='Spectral', figsize=(10, 8))
     return data
 
 
-def sim_path_force(model, x0, T, data_full, t_check, nt=100, s1=1, s2=1, plot=False):  
+def sim_path_force(model, x0, T, data_full, t_check=None, nt=100, s1=1, s2=1, plot=False):  
         
     t_grid = np.linspace(0, T, nt)
-    t_grid = np.unique(np.concatenate((t_check, t_grid), axis=None))
+    if t_check is None:
+        t_grid = np.unique(np.concatenate((t_check, t_grid), axis=None))
     t_grid.sort()
     t_diff = np.diff(t_grid) / T
     nt_grid = t_grid.shape[0]
@@ -702,16 +706,18 @@ def sim_path_force(model, x0, T, data_full, t_check, nt=100, s1=1, s2=1, plot=Fa
             # x = x + v * dt
         data = np.vstack((data, x.detach().numpy()))
         ts.append(tf)
+    data = pd.DataFrame(data, columns=['x', 'y'])
+    data['time'] = np.repeat(ts, n_sample)
     if plot:
-        data = pd.DataFrame(data, columns=['x', 'y'])
-        data['time'] = np.repeat(ts, n_sample)
         data.plot.scatter(x='x', y='y', c='time', s=1, cmap='Spectral', figsize=(10, 8))
     return data
 
 
-def sim_path_soft(model, x0, T, nt=100, s1=1, s2=1, plot=False):  
+def sim_path_soft(model, x0, T, t_check=None, nt=100, s1=1, s2=1, plot=False):  
         
     t_grid = np.linspace(0, T, nt)
+    if t_check is not None:
+        t_grid = np.unique(np.concatenate((t_check, t_grid), axis=None))
     t_diff = np.diff(t_grid) / T
     nt_grid = t_grid.shape[0]
     me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2), torch.tensor(np.diag([s1, s2])).float())
@@ -729,17 +735,19 @@ def sim_path_soft(model, x0, T, nt=100, s1=1, s2=1, plot=False):
         # x = x + v * dt
         data = np.vstack((data, x.detach().numpy()))
         ts.append(t_grid[t_ind + 1])
+    data = pd.DataFrame(data, columns=['x', 'y'])
+    data['time'] = np.repeat(ts, n_sample)
     if plot:
-        data = pd.DataFrame(data, columns=['x', 'y'])
-        data['time'] = np.repeat(ts, n_sample)
         data.plot.scatter(x='x', y='y', c='time', s=1, cmap='Spectral', figsize=(10, 8))
     return data
         
 
-def sim_path_soft_seg(model, x0, T, bound, nt=100, s1=1, s2=1, plot=False):  
+def sim_path_soft_seg(model, x0, T, bound, t_check=None, nt=100, s1=1, s2=1, plot=False):  
     
     # t_grid = np.linspace(0, T, nt)    
     t_grid = np.concatenate((np.linspace(0, T, nt), bound[1:, 0]), axis=None)
+    if t_check is not None:
+        t_grid = np.unique(np.concatenate((t_check, t_grid), axis=None))
     t_grid.sort()
     t_diff = np.diff(t_grid) / T
     nt_grid = t_grid.shape[0]
@@ -765,14 +773,14 @@ def sim_path_soft_seg(model, x0, T, bound, nt=100, s1=1, s2=1, plot=False):
         # x = x + v * dt
         data = np.vstack((data, x.detach().numpy()))
         ts.append(t_grid[t_ind + 1])
+    data = pd.DataFrame(data, columns=['x', 'y'])
+    data['time'] = np.repeat(ts, n_sample)
     if plot:
-        data = pd.DataFrame(data, columns=['x', 'y'])
-        data['time'] = np.repeat(ts, n_sample)
         data.plot.scatter(x='x', y='y', c='time', s=1, cmap='Spectral', figsize=(10, 8))
     return data
 
 
-def sim_path_fb_ot(framework, x0, nt=100, s1=1, s2=1, h=None, plot=False):
+def sim_path_fb_ot(framework, x0, t_check=None, nt=100, s1=1, s2=1, h=None, plot=False):
     
     model_f = framework['model_f']
     model_b = framework['model_b']
@@ -783,6 +791,8 @@ def sim_path_fb_ot(framework, x0, nt=100, s1=1, s2=1, h=None, plot=False):
     T = np.max(t_data)
     
     t_grid = np.unique(np.concatenate((np.linspace(0, T, nt), t_data), axis=None))
+    if t_check is not None:
+        t_grid = np.unique(np.concatenate((t_check, t_grid), axis=None))
     t_grid.sort()
     nt_grid = t_grid.shape[0]
     me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2), torch.tensor(np.diag([s1, s2])).float())
@@ -844,10 +854,9 @@ def sim_path_fb_ot(framework, x0, nt=100, s1=1, s2=1, h=None, plot=False):
             data_temp[:, 1] = (1 - gamma) * data_temp_x[:, 1] + gamma * data_temp_y[:, 1]
             data = np.vstack((data, data_temp))
             mod_ind += 1
-            
+    data = pd.DataFrame(data, columns=['x', 'y'])
+    data['time'] = np.repeat(ts, n_sample)        
     if plot:
-        data = pd.DataFrame(data, columns=['x', 'y'])
-        data['time'] = np.repeat(ts, n_sample)
         data.plot.scatter(x='x', y='y', c='time', s=1, cmap='Spectral', figsize=(10, 8))
     return data
 
