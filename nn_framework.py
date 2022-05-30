@@ -585,6 +585,93 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
             'x1': end_loc}
 
 
+def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
+                        n_sample=100, n_iter=128, nt_grid=100, 
+                        error_s1=1, error_s2=1,
+                        h=None, k=5, lock_dist=0.01,
+                        r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1,
+                        track=False):
+    
+    t_data = data.time.unique()
+    t_data.sort()
+    t_grid = np.unique(np.concatenate((t_data, np.linspace(0, T, nt_grid)), axis=None))
+    t_grid.sort()
+    nt = t_grid.shape[0]
+        
+    me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2), 
+                                                                    torch.tensor(np.diag([error_s1, error_s2])).float())
+        
+    model_list = []
+    optimizer_list = []
+    for m in range(M):
+        model_list.append(NeuralNetwork(3, 2, 128))
+        optimizer_list.append(torch.optim.Adam(model_list[m].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
+    
+    model_mn = NeuralNetwork(3, M, 128)
+    optimizer_mn = torch.optim.Admam(model_mn.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+    
+    x0 = data[data.time == 0]
+    
+    # x_tensor = []    
+    # for t in t_data:
+    #     x_tensor.append(torch.from_numpy(data[data.time == t][['x','y']].to_numpy()))
+        
+    obj = []
+    
+    for n in range(n_iter):
+        
+        x = torch.from_numpy(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
+        ind_check = 1
+        check = True
+        l = torch.tensor(0.)
+        for t_ind in range(nt - 1):
+            ti = t_grid[t_ind]
+            tf = t_grid[t_ind + 1]
+            dt = (tf - ti) / T
+            inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+            v = model(inp)
+            e = me.sample([n_sample])
+            x = x + v * dt + np.sqrt(dt) * e
+            l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
+            phat = kernel(x, h=h)
+            pvhat = kernel(v, h=h)
+            l = l + r_ent_v * dt * (pvhat.log().mean())
+            if check:
+                if tf == t_data[ind_check]:
+                    x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
+                    # x_support = torch.from_numpy(data.sample(1000)[['x', 'y']].to_numpy())
+                    c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
+                    c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
+                    c = c1.pow(2) + c2.pow(2)
+                    # prop_in = torch.diag(1 / c.sum(axis=1)) @ c
+                    p = kernel_pred(x_check, x, h=h)
+                    l = l + r_kl * (phat.log() - p.log()).mean()
+                    c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
+                    ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
+                    l = l + r_lock * (torch.max(c_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+                    l = l + r_lock * (torch.max(ctr_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
+                    if tf == t_data[-1]:
+                        check = False
+                    ind_check += 1
+                else:
+                    l = l + r_ent * dt * (phat.log().mean())
+                # l = l + r_ent * dt * (phat.log().mean())
+        
+        if bool(l.isnan()):
+            raise ArithmeticError('encountered nan at iteration ' + str(int(n)))
+        if track:
+            print('c = ', str(float(l)), ' at iteration ', str(int(n)))
+        
+        optimizer.zero_grad()
+        l.backward()
+        optimizer.step()
+        obj.append(float(l))
+        
+    return {'model': model,
+            'optimizer': optimizer,
+            'cost': obj}
+
+
 def sim_path_ot(res, x0, T, nt=100, t_check=None, s1=1, s2=1, plot=False):  
     
     t_data = res['t_data']
