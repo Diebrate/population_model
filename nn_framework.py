@@ -629,6 +629,10 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
             tf = t_grid[t_ind + 1]
             dt = (tf - ti) / T
             inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+            traj_w = torch.nn.model_mn(inp)
+            v_temp = torch.zeros(n_sample, 2)
+            for m in range(M):
+                v_temp = v_temp + torch.diag(traj_w[:, m]) @ model_list[m](inp)
             v = model(inp)
             e = me.sample([n_sample])
             x = x + v * dt + np.sqrt(dt) * e
