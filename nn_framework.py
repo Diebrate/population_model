@@ -609,6 +609,7 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
     
     model_mn = NeuralNetwork(3, M, 128)
     optimizer_mn = torch.optim.Admam(model_mn.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+    smax = nn.Softmax(axis=1)
     
     x0 = data[data.time == 0]
     
@@ -620,6 +621,7 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
     
     for n in range(n_iter):
         
+        # iteration for drift term
         x = torch.from_numpy(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
         ind_check = 1
         check = True
@@ -629,11 +631,10 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
             tf = t_grid[t_ind + 1]
             dt = (tf - ti) / T
             inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
-            traj_w = torch.nn.model_mn(inp)
-            v_temp = torch.zeros(n_sample, 2)
+            traj_w = smax(model_mn(inp))
+            v = torch.zeros(n_sample, 2)
             for m in range(M):
-                v_temp = v_temp + torch.diag(traj_w[:, m]) @ model_list[m](inp)
-            v = model(inp)
+                v = v + torch.diag(traj_w[:, m]) @ model_list[m](inp)
             e = me.sample([n_sample])
             x = x + v * dt + np.sqrt(dt) * e
             l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
@@ -662,14 +663,67 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
                 # l = l + r_ent * dt * (phat.log().mean())
         
         if bool(l.isnan()):
-            raise ArithmeticError('encountered nan at iteration ' + str(int(n)))
+            raise ArithmeticError('encountered nan at iteration ' + str(int(n)) + ' for drift term')
         if track:
-            print('c = ', str(float(l)), ' at iteration ', str(int(n)))
-        
-        optimizer.zero_grad()
+            print('c = ', str(float(l)), ' at iteration ', str(int(n)) + ' for drift term')
+        for m in range(M):
+            optimizer_list[m].zero_grad()
         l.backward()
-        optimizer.step()
+        for m in range(M):
+            optimizerm_list[m].step()
         obj.append(float(l))
+        
+        # iteration for weight term
+        x = torch.from_numpy(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
+        ind_check = 1
+        check = True
+        l = torch.tensor(0.)
+        for t_ind in range(nt - 1):
+            ti = t_grid[t_ind]
+            tf = t_grid[t_ind + 1]
+            dt = (tf - ti) / T
+            inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+            traj_w = smax(model_mn(inp))
+            v = torch.zeros(n_sample, 2)
+            for m in range(M):
+                v = v + torch.diag(traj_w[:, m]) @ model_list[m](inp)
+            e = me.sample([n_sample])
+            x = x + v * dt + np.sqrt(dt) * e
+            l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
+            phat = kernel(x, h=h)
+            pvhat = kernel(v, h=h)
+            l = l + r_ent_v * dt * (pvhat.log().mean())
+            if check:
+                if tf == t_data[ind_check]:
+                    x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
+                    # x_support = torch.from_numpy(data.sample(1000)[['x', 'y']].to_numpy())
+                    c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
+                    c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
+                    c = c1.pow(2) + c2.pow(2)
+                    # prop_in = torch.diag(1 / c.sum(axis=1)) @ c
+                    p = kernel_pred(x_check, x, h=h)
+                    l = l + r_kl * (phat.log() - p.log()).mean()
+                    c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
+                    ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
+                    l = l + r_lock * (torch.max(c_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+                    l = l + r_lock * (torch.max(ctr_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
+                    if tf == t_data[-1]:
+                        check = False
+                    ind_check += 1
+                else:
+                    l = l + r_ent * dt * (phat.log().mean())
+                # l = l + r_ent * dt * (phat.log().mean())
+        
+        if bool(l.isnan()):
+            raise ArithmeticError('encountered nan at iteration ' + str(int(n)) + ' for weight term')
+        if track:
+            print('c = ', str(float(l)), ' at iteration ', str(int(n)) + ' for weight term')
+        
+        optimizer_mn.zero_grad()
+        l.backward()
+        optimizer_mn.step()
+        obj.append(float(l))
+        
         
     return {'model': model,
             'optimizer': optimizer,
