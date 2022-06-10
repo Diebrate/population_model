@@ -16,6 +16,7 @@ nt_grid = 250
 n_seg = 5
 n_sample = 100
 nt_subgrid = 10
+n_mixed = 8
 
 # simulation setting
 nt = nt_grid

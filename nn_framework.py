@@ -608,8 +608,8 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
         optimizer_list.append(torch.optim.Adam(model_list[m].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
     
     model_mn = NeuralNetwork(3, M, 128)
-    optimizer_mn = torch.optim.Admam(model_mn.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
-    smax = nn.Softmax(axis=1)
+    optimizer_mn = torch.optim.Adam(model_mn.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+    smax = nn.Softmax(dim=1)
     
     x0 = data[data.time == 0]
     
@@ -670,7 +670,7 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
             optimizer_list[m].zero_grad()
         l.backward()
         for m in range(M):
-            optimizerm_list[m].step()
+            optimizer_list[m].step()
         obj.append(float(l))
         
         # iteration for weight term
@@ -725,8 +725,10 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
         obj.append(float(l))
         
         
-    return {'model': model,
-            'optimizer': optimizer,
+    return {'model_drift': model_list,
+            'optimizer_drift': optimizer_list,
+            'model_mn': model_mn,
+            'optimizer_mn': optimizer_mn,
             'cost': obj}
 
 
@@ -1001,6 +1003,42 @@ def sim_path_fb_ot(framework, x0, t_check=None, nt=100, s1=1, s2=1, h=None, plot
             mod_ind += 1
     data = pd.DataFrame(data, columns=['x', 'y'])
     data['time'] = np.repeat(ts, n_sample)        
+    if plot:
+        data.plot.scatter(x='x', y='y', c='time', s=1, cmap='Spectral', figsize=(10, 8))
+    return data
+
+
+def sim_path_mixed(res, x0, T, nt=100, t_check=None, s1=1, s2=1, plot=False):  
+    
+    t_grid = np.linspace(0, T, nt)
+    if t_check is not None:
+        t_grid = np.unique(np.concatenate((t_check, t_grid), axis=None))
+    t_diff = np.diff(t_grid) / T
+    nt_grid = t_grid.shape[0]
+    me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2), torch.tensor(np.diag([s1, s2])).float())
+    smax = nn.Softmax(dim=1)
+    data = x0
+    x = torch.tensor(x0)
+    ts = [0]
+    n_sample = x.shape[0]
+    model_list = res['model_drift']
+    model_mn = res['model_mn']
+    M = len(model_list)
+    for t_ind in range(nt_grid - 1):
+        t = t_grid[t_ind]
+        dt = t_diff[t_ind]
+        inp = torch.cat([x, t * torch.ones(n_sample, 1) / T], dim=1)
+        traj_w = smax(model_mn(inp))
+        v = torch.zeros(n_sample, 2)
+        for m in range(M):
+            v = v + torch.diag(traj_w[:, m]) @ model_list[m](inp)
+        e = me.sample([n_sample])
+        x = x + v * dt + np.sqrt(dt) * e
+        # x = x + v * dt
+        data = np.vstack((data, x.detach().numpy()))
+        ts.append(t_grid[t_ind + 1])
+    data = pd.DataFrame(data, columns=['x', 'y'])
+    data['time'] = np.repeat(ts, n_sample)
     if plot:
         data.plot.scatter(x='x', y='y', c='time', s=1, cmap='Spectral', figsize=(10, 8))
     return data

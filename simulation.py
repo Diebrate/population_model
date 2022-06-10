@@ -6,14 +6,15 @@ import load
 import nn_framework
 import ot
 
-data_name = 'root'
-method = 'fb_ot'
+data_name = 'wot'
+method = 'mixed'
 
 use_sys = True
 if use_sys:
     import sys
     time_frac = float(sys.argv[1])
     data_name = str(sys.argv[2])
+    method = str(sys.argv[3])
 else:
     time_frac = 0.8
 
@@ -69,15 +70,20 @@ t_check = data_origin.time.unique()
 t_check.sort()
 t_check = t_check[t_check > 0]
 
+data_MC = []
+
 for m in range(M):
     
-    data_all = data_origin.copy()
-    data_all.x = data_origin.x + np.random.normal(size=data_origin.x.shape[0]) * 0.05
-    data_all.y = data_origin.x + np.random.normal(size=data_origin.x.shape[0]) * 0.05
+    data_all = pd.read_csv('data/sim/m' + str(m) + '_' + data_name + '_all.csv') 
     
     data = data_all[np.isin(data_all.time, t_trim)]
     data_test = data_all[~np.isin(data_all.time, t_trim)]
     x0 = data[data.time == 0][['x', 'y']].sample(n_test, replace=True).to_numpy()
+    
+    t_sim = np.concatenate((np.linspace(0, T, nt), t_trim, t_check))
+    t_sim = np.unique(t_sim)
+    t_sim.sort()
+    nt_sim = len(t_sim)
     
     if method == 'ot':
         res = nn_framework.train_alg_mfc_ot(data, T=T, lr=lr,
@@ -87,7 +93,7 @@ for m in range(M):
                                             r_v=r_v, r_ent=r_ent, r_ent_v=r_ent_v, r_lock=r_lock,
                                             reg=reg, reg1=reg1, reg2=reg2,
                                             track=False)
-        res_mf = nn_framework.sim_path_ot(res, x0, T=T, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, plot=False)
+        res_sim = nn_framework.sim_path_ot(res, x0, T=T, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, plot=False)
     elif method == 'force':
         res = nn_framework.train_alg_mfc_force(data, T=T, lr=lr,
                                                 n_sample=n_sample, n_iter=n_iter, nt_grid=nt_grid, 
@@ -95,7 +101,7 @@ for m in range(M):
                                                 h=h,
                                                 r_v=r_v, r_ent=r_ent, r_kl=r_kl,
                                                 track=False)
-        res_mf = nn_framework.sim_path_force(res['model'], x0, T=T, data_full=data, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, plot=False)
+        res_sim = nn_framework.sim_path_force(res['model'], x0, T=T, data_full=data, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, plot=False)
     elif method == 'soft':
         res = nn_framework.train_alg_mfc_soft(data, T=T, lr=lr,
                                               n_sample=n_sample, n_iter=n_iter, nt_grid=nt_grid, 
@@ -103,7 +109,7 @@ for m in range(M):
                                               h=h, k=k, lock_dist=lock_dist,
                                               r_v=r_v, r_ent=r_ent, r_kl=r_kl, r_ent_v=r_ent_v, r_lock=r_lock,
                                               track=False)
-        res_mf = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, plot=False)
+        res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, plot=False)
     elif method == 'soft_seg':
         res = nn_framework.train_alg_mfc_soft_seg(data, T=T, lr=lr,
                                                   n_sample=n_sample, n_iter=n_iter, nt_grid=nt_grid, n_seg=n_seg, 
@@ -111,7 +117,7 @@ for m in range(M):
                                                   h=h, k=k, lock_dist=lock_dist,
                                                   r_v=r_v, r_ent=r_ent, r_kl=r_kl, r_ent_v=r_ent_v, r_lock=r_lock,
                                                   track=False)
-        res_mf = nn_framework.sim_path_soft_seg(res['model'], x0, T=T, t_check=t_check, nt=nt, bound=res['bound'], s1=e_s1, s2=e_s2, plot=False)
+        res_sim = nn_framework.sim_path_soft_seg(res['model'], x0, T=T, t_check=t_check, nt=nt, bound=res['bound'], s1=e_s1, s2=e_s2, plot=False)
     elif method == 'fb_ot':
         res = nn_framework.train_alg_mfc_fb_ot(data, lr=lr,
                                                 n_sample=n_sample, n_iter=n_iter, nt_subgrid=nt_subgrid, 
@@ -120,55 +126,52 @@ for m in range(M):
                                                 r_v=r_v, r_ent=r_ent, r_kl=r_kl, r_ent_v=r_ent_v, r_lock=r_lock,
                                                 reg=reg, reg1=reg1, reg2=reg2,
                                                 track=False)
-        res_mf = nn_framework.sim_path_fb_ot(res, x0, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, h=h, plot=False)
-    
-    t_sim = np.concatenate((np.linspace(0, T, nt), t_trim, t_check))
-    t_sim = np.unique(t_sim)
-    t_sim.sort()
-    nt_sim = len(t_sim)
-    
-    x = x0.copy()
-    res_ot = x0.copy()
-    ind_check = 0
-    reg_list = (100 - reg) * np.exp(-np.arange(100)) + reg
-    for i in range(nt_sim - 1):
-        ti = t_sim[i]
-        tf = t_sim[i + 1]
-        if ti == t_trim[ind_check]:
-            d0 = data[data.time == t_trim[ind_check]][['x', 'y']].sample(n_sample * 3, replace=False).to_numpy()
-            d1 = data[data.time == t_trim[ind_check + 1]][['x', 'y']].sample(n_sample * 3, replace=False).to_numpy()
-            costm = ot.compute_dist(d0, d1, dim=2, single=False)
-            p0 = np.ones(d0.shape[0]) / d0.shape[0]
-            p1 = np.ones(d1.shape[0]) / d1.shape[0]
-            tmap = ot.ot_unbalanced_log_stabilized(p0, p1, costm, reg, reg1, reg2, reg_list)
-            tmap = np.diag(1 / tmap.sum(axis=1)) @ tmap
-            n0 = d0.shape[0]
-            n1 = d1.shape[0]
-            ref_ind = np.zeros(n1)
-            for j in range(n0):
-                ref_ind[j] = np.random.choice(np.arange(n1), p=tmap[j, :])
-            ref_ind = ref_ind.astype(int)
-            cdist = ot.compute_dist(x, d0, dim=2, single=False)
-            x_start = x.copy()
-            x_end = d1[ref_ind[cdist.argmin(axis=1)]]
-            t_start = t_trim[ind_check]
-            t_end = t_trim[ind_check + 1]
-            ind_check += 1
-        gamma = (tf - t_start) / (t_end - t_start)
-        x = (1 - gamma) * x_start + gamma * x_end
-        res_ot = np.vstack((res_ot, x))
-        
-    res_ot = np.hstack((res_ot, np.repeat(t_sim, n_test).reshape(-1, 1)))
-    res_ot = pd.DataFrame(res_ot, columns=['x', 'y', 'time'])
-    
-    res_mf['source'] = 'mf'
-    res_ot['source'] = 'ot'
-    
-    res_comp = pd.concat([res_mf, res_ot], ignore_index=True)
+        res_sim = nn_framework.sim_path_fb_ot(res, x0, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, h=h, plot=False)
+    elif method == 'mixed':
+        res = nn_framework.train_alg_mfc_mixed(data, T=T, lr=lr,
+                                               n_sample=n_sample, n_iter=n_iter, nt_grid=nt_grid, 
+                                               error_s1=e_s1, error_s2=e_s2,
+                                               h=h, k=k, lock_dist=lock_dist,
+                                               r_v=r_v, r_ent=r_ent, r_kl=r_kl, r_ent_v=r_ent_v, r_lock=r_lock,
+                                               track=False)
+        res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, plot=False)
+    elif method == 'disc_ot':
+        x = x0.copy()
+        res_sim = x0.copy()
+        ind_check = 0
+        reg_list = (100 - reg) * np.exp(-np.arange(100)) + reg
+        for i in range(nt_sim - 1):
+            ti = t_sim[i]
+            tf = t_sim[i + 1]
+            if ti == t_trim[ind_check]:
+                d0 = data[data.time == t_trim[ind_check]][['x', 'y']].sample(n_sample * 3, replace=False).to_numpy()
+                d1 = data[data.time == t_trim[ind_check + 1]][['x', 'y']].sample(n_sample * 3, replace=False).to_numpy()
+                costm = ot.compute_dist(d0, d1, dim=2, single=False)
+                p0 = np.ones(d0.shape[0]) / d0.shape[0]
+                p1 = np.ones(d1.shape[0]) / d1.shape[0]
+                tmap = ot.ot_unbalanced_log_stabilized(p0, p1, costm, reg, reg1, reg2, reg_list)
+                tmap = np.diag(1 / tmap.sum(axis=1)) @ tmap
+                n0 = d0.shape[0]
+                n1 = d1.shape[0]
+                ref_ind = np.zeros(n1)
+                for j in range(n0):
+                    ref_ind[j] = np.random.choice(np.arange(n1), p=tmap[j, :])
+                ref_ind = ref_ind.astype(int)
+                cdist = ot.compute_dist(x, d0, dim=2, single=False)
+                x_start = x.copy()
+                x_end = d1[ref_ind[cdist.argmin(axis=1)]]
+                t_start = t_trim[ind_check]
+                t_end = t_trim[ind_check + 1]
+                ind_check += 1
+            gamma = (tf - t_start) / (t_end - t_start)
+            x = (1 - gamma) * x_start + gamma * x_end
+            res_sim = np.vstack((res_sim, x))        
+        res_sim = np.hstack((res_sim, np.repeat(t_sim, n_test).reshape(-1, 1)))
+        res_sim = pd.DataFrame(res_sim, columns=['x', 'y', 'time'])
 
-    df_sim_name = 'data/sim/m' + str(m) + '_' + data_name + '_sim_r' + str(time_frac).replace('.', '_') + '.csv'
-    df_test_name = 'data/sim/m' + str(m) + '_' + data_name + '_test_r' + str(time_frac).replace('.', '_') + '.csv'
-    df_train_name = 'data/sim/m' + str(m) + '_' + data_name + '_train_r' + str(time_frac).replace('.', '_') + '.csv' 
-    res_comp.to_csv(df_sim_name)
+    df_sim_name = 'data/sim/m' + str(m) + '_' + data_name + '_' + method + '_sim_r' + str(time_frac).replace('.', '_') + '.csv'
+    df_test_name = 'data/sim/m' + str(m) + '_' + data_name +  '_' + method + '_test_r' + str(time_frac).replace('.', '_') + '.csv'
+    df_train_name = 'data/sim/m' + str(m) + '_' + data_name +  '_' + method + '_train_r' + str(time_frac).replace('.', '_') + '.csv' 
+    res_sim.to_csv(df_sim_name)
     data_test.to_csv(df_test_name)
     data.to_csv(df_train_name)

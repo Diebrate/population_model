@@ -5,13 +5,21 @@ import matplotlib.pyplot as plt
 import nn_framework
 import load
 
-data_name = 'root'
-method = 'fb_ot'
-time_frac = 1
+
+use_sys = True
+if use_sys:
+    import sys
+    time_frac = float(sys.argv[1])
+    data_name = str(sys.argv[2])
+    method = str(sys.argv[3])
+else:
+    time_frac = 1
+    data_name = 'root'
+    method = 'mixed'
 
 np.random.seed(12345)
 
-use_default = False
+use_default = True
 
 #################################
 if use_default:
@@ -35,9 +43,10 @@ else:
     n_seg = 5
     n_sample = 100
     nt_subgrid = 10
+    n_mixed = 10
 
     # simulation setting
-    nt = 0
+    nt = 100
     n_test = 1000
 
     e_s1 = 0.1
@@ -51,7 +60,10 @@ else:
     M = 20
 #################################
 
-img_name = 'image/' + data_name + '_sim_r' + str(r_v).replace('.', '_') + '_r' +  str(r_ent).replace('.', '_') + '_r' + str(r_kl).replace('.', '_') + '.png' 
+if use_sys:
+    n_mixed = int(sys.argv[4])
+
+img_name = 'image/' + data_name + '_' + method + '_sim_r' + str(r_v).replace('.', '_') + '_r' +  str(r_ent).replace('.', '_') + '_r' + str(r_kl).replace('.', '_') + '.png' 
 
 print('r_v=' + str(r_v) + '\n' + 'r_ent=' + str(r_ent) + '\n' + 'r_kl=' + str(r_kl))
 
@@ -123,9 +135,20 @@ elif method == 'fb_ot':
                                             reg=reg, reg1=reg1, reg2=reg2,
                                             track=True)
     res_sim = nn_framework.sim_path_fb_ot(res, x0, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, h=h, plot=True)
+elif method == 'mixed':
+    res = nn_framework.train_alg_mfc_mixed(data, T=T, lr=lr, M=n_mixed,
+                                           n_sample=n_sample, n_iter=n_iter, nt_grid=nt_grid, 
+                                           error_s1=e_s1, error_s2=e_s2,
+                                           h=h, k=k, lock_dist=lock_dist,
+                                           r_v=r_v, r_ent=r_ent, r_kl=r_kl, r_ent_v=r_ent_v, r_lock=r_lock,
+                                           track=True)
+    res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, nt=nt, s1=e_s1, s2=e_s2, plot=True)
 
 # plt.savefig(img_name)
 
 print('r_v=' + str(r_v) + '\n' + 'r_ent=' + str(r_ent) + '\n' + 'r_kl=' + str(r_kl))
 
 # res_sim.to_csv(df_name)
+
+save_name = 'image/' + data_name + '_' + method + '_sim_m' + str(n_mixed) + '.png'
+plt.savefig(save_name)
