@@ -6,7 +6,7 @@ import nn_framework
 import load
 
 
-use_sys = True
+use_sys = False
 if use_sys:
     import sys
     time_frac = float(sys.argv[1])
@@ -19,7 +19,7 @@ else:
 
 np.random.seed(12345)
 
-use_default = True
+use_default = False
 
 #################################
 if use_default:
@@ -27,11 +27,11 @@ if use_default:
     from param import *
 else:
     # trial setting
-    r_v = 1
-    r_ent = 0.01
+    r_v = 0.01
+    r_ent = 1
     r_ent_v = 1
-    r_kl = 0.001
-    r_lock = 1
+    r_kl = 10
+    r_lock = 10
     reg = 0.01
     reg1 = 50
     reg2 = 50
@@ -39,23 +39,23 @@ else:
     lock_dist = 0.001
 
     # model setting
-    nt_grid = 250
+    nt_grid = 128
     n_seg = 5
     n_sample = 100
     nt_subgrid = 10
-    n_mixed = 10
+    n_mixed = 4
 
     # simulation setting
-    nt = 100
+    nt = nt_grid
     n_test = 1000
 
-    e_s1 = 0.1
-    e_s2 = 0.1
-    # h = None
-    h = np.diag(np.ones(2)) * 1
+    e_s1 = 0.005
+    e_s2 = 0.005
+    h = None
+    # h = np.diag(np.ones(2)) * 1
 
     lr = 0.001
-    n_iter = 100
+    n_iter = 128
 
     M = 20
 #################################
@@ -150,5 +150,5 @@ print('r_v=' + str(r_v) + '\n' + 'r_ent=' + str(r_ent) + '\n' + 'r_kl=' + str(r_
 
 # res_sim.to_csv(df_name)
 
-save_name = 'image/' + data_name + '_' + method + '_sim_m' + str(n_mixed) + '.png'
-plt.savefig(save_name)
+save_name = 'image/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_m' + str(n_mixed) + '.png'
+# plt.savefig(save_name)
