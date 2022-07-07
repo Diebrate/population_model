@@ -644,20 +644,25 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
             l = l + r_ent_v * dt * (pvhat.log().mean())
             if check:
                 if tf == t_data[ind_check]:
-                    x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
-                    # x_support = torch.from_numpy(data.sample(1000)[['x', 'y']].to_numpy())
+                    # x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
+                    x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(10 * n_sample, replace=True).to_numpy())
                     c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
                     c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
                     c = c1.pow(2) + c2.pow(2)
-                    weight_pen = weight_trans(model_mn(torch.cat([x_check, ti * torch.ones(n_sample, 1) / T], dim=1)))
-                    c_pen = traj_w @ traj_w.log().T - traj_w @ weight_pen.log().T
-                    c = c * c_pen / (1 + c_pen)
+                    weight_pen = weight_trans(model_mn(torch.cat([x_check, ti * torch.ones(x_check.shape[0], 1) / T], dim=1)))
+                    c_pen = traj_w * traj_w.log() @ torch.ones(M, x_check.shape[0]) - traj_w @ weight_pen.log().T
+                    c_pen = c_pen + (weight_pen * weight_pen.log() @ torch.ones(M, n_sample) - weight_pen @ traj_w.log().T).T
+                    # c = c * c_pen.exp()
+                    cpen_lowk, cpen_rank = c_pen.topk(k=k,dim=1, largest=False)
+                    ctrpen_lowk, ctrpen_rank = c_pen.topk(k=k, dim=0, largest=False)
+                    c_lowk = torch.gather(c, dim=1, index=cpen_rank)
+                    ctr_lowk = torch.gather(c, dim=0, index=ctrpen_rank)
                     p = kernel_pred(x_check, x, h=h)
-                    l = l + r_kl * (phat.log() - p.log()).mean()
+                    l = l - r_kl * p.log().mean()
                     c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
-                    # ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
+                    ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
                     l = l + r_lock * (torch.max(c_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
-                    # l = l + r_lock * (torch.max(ctr_lowk - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
+                    l = l + r_lock * (torch.max(ctr_lowk - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
                     if tf == t_data[-1]:
                         check = False
                     ind_check += 1

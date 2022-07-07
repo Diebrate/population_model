@@ -6,7 +6,7 @@ import nn_framework
 import load
 
 
-use_sys = False
+use_sys = True
 if use_sys:
     import sys
     time_frac = float(sys.argv[1])
@@ -27,11 +27,11 @@ if use_default:
     from param import *
 else:
     # trial setting
-    r_v = 0.01
+    r_v = 1
     r_ent = 1
     r_ent_v = 1
-    r_kl = 10
-    r_lock = 10
+    r_kl = 1
+    r_lock = 1
     reg = 0.01
     reg1 = 50
     reg2 = 50
@@ -49,8 +49,8 @@ else:
     nt = nt_grid
     n_test = 1000
 
-    e_s1 = 0.005
-    e_s2 = 0.005
+    e_s1 = 0.001
+    e_s2 = 0.001
     h = None
     # h = np.diag(np.ones(2)) * 1
 
