@@ -6,7 +6,7 @@ import nn_framework
 import load
 
 
-use_sys = True
+use_sys = False
 if use_sys:
     import sys
     time_frac = float(sys.argv[1])
@@ -43,7 +43,7 @@ else:
     n_seg = 5
     n_sample = 100
     nt_subgrid = 10
-    n_mixed = 4
+    n_mixed = 8
 
     # simulation setting
     nt = nt_grid
@@ -55,7 +55,7 @@ else:
     # h = np.diag(np.ones(2)) * 1
 
     lr = 0.001
-    n_iter = 128
+    n_iter = 256
 
     M = 20
 #################################

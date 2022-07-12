@@ -634,8 +634,13 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
             inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
             traj_w = weight_trans(model_mn(inp))
             v = torch.zeros(n_sample, 2)
+            traj_id = torch.zeros(n_sample, M)
+            for n_ind in range(n_sample):
+                traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
+                traj_id[n_ind, traj_pick] = 1
             for m in range(M):
-                v = v + torch.diag(traj_w[:, m]) @ model_list[m](inp)
+                # v = v + torch.diag(traj_w[:, m]) @ model_list[m](inp)
+                v = v + torch.diag(traj_id[:, m]) @ model_list[m](inp)
             e = me.sample([n_sample])
             x = x + v * dt + np.sqrt(dt) * e
             l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
@@ -652,7 +657,7 @@ def train_alg_mfc_mixed(data, T, lr=0.001, M=5,
                     weight_pen = weight_trans(model_mn(torch.cat([x_check, ti * torch.ones(x_check.shape[0], 1) / T], dim=1)))
                     c_pen = traj_w * traj_w.log() @ torch.ones(M, x_check.shape[0]) - traj_w @ weight_pen.log().T
                     c_pen = c_pen + (weight_pen * weight_pen.log() @ torch.ones(M, n_sample) - weight_pen @ traj_w.log().T).T
-                    # c = c * c_pen.exp()
+                    c_pen = c * c_pen.exp()
                     cpen_lowk, cpen_rank = c_pen.topk(k=k,dim=1, largest=False)
                     ctrpen_lowk, ctrpen_rank = c_pen.topk(k=k, dim=0, largest=False)
                     c_lowk = torch.gather(c, dim=1, index=cpen_rank)
