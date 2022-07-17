@@ -32,3 +32,33 @@ n_iter = 100
 
 M = 20
 
+param_info = {#regularizer
+              'r_v': float,
+              'r_ent': float,
+              'r_ent_v' : float,
+              'r_kl': float,
+              'r_lock': float,
+              'reg': float,
+              'reg1': float,
+              'reg2': float,
+              'k': int,
+              'lock_dist': float,
+              # model setting
+              'nt_grid': int,
+              'n_seg': int,
+              'n_sample': int,
+              'nt_subgrid': int,
+              'n_mixed': int,
+              # simulation setting
+              'nt': int,
+              'n_test': int,
+              's1': float,
+              's2': float,
+              'h': float,
+              # optimization
+              'lr': float,
+              'n_iter': int,
+              # mc
+              'M': int,
+              # setting id
+              'setting_id': int}
