@@ -381,10 +381,6 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
     x0 = data[data.time == 0]
     x1 = data[data.time == data.time.max()]
 
-    # x_tensor = []
-    # for t in t_data:
-    #     x_tensor.append(torch.from_numpy(data[data.time == t][['x','y']].to_numpy()))
-
     obj_f = []
     obj_b = []
 
@@ -545,7 +541,7 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
     return {'model_f': model_f,
             'model_b': model_b,
             'optimizer_f': optimizer_f,
-            'optimizaer_b': optimizer_b,
+            'optimizer_b': optimizer_b,
             'cost_f': obj_f,
             'cost_b': obj_b}
 
@@ -955,6 +951,264 @@ def train_alg_mfc_mixed(data, T, lr=0.001, n_mixed=5,
             'cost': obj}
 
 
+def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
+                           n_sample=100, n_iter=128, nt_grid=100, fb_iter=5,
+                           s1=1, s2=1,
+                           h=None, k=5, lock_dist=0.01,
+                           r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1,
+                           track=False, **_):
+
+    t_data = data.time.unique()
+    t_data.sort()
+    t_grid = np.unique(np.concatenate((t_data, np.linspace(0, T, nt_grid)), axis=None))
+    t_grid.sort()
+    nt = t_grid.shape[0]
+    M = n_mixed
+
+    me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2),
+                                                                    torch.tensor(np.diag([s1, s2])).float())
+
+    weight_trans = nn.Softmin(dim=1)
+
+    model_f_list = []
+    optimizer_f_list = []
+    for m in range(M):
+        model_f_list.append(NeuralNetwork(3, 2, 128))
+        optimizer_f_list.append(torch.optim.Adam(model_f_list[m].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
+
+    model_f_mn = NeuralNetwork(3, M, 128)
+    optimizer_f_mn = torch.optim.Adam(model_f_mn.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+
+    model_b_list = []
+    optimizer_b_list = []
+    for m in range(M):
+        model_b_list.append(NeuralNetwork(3, 2, 128))
+        optimizer_b_list.append(torch.optim.Adam(model_b_list[m].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
+
+    model_b_mn = NeuralNetwork(3, M, 128)
+    optimizer_b_mn = torch.optim.Adam(model_b_mn.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
+
+    x0 = data[data.time == 0]
+    x1 = data[data.time == data.time.max()]
+
+    obj_f = []
+    obj_b = []
+
+    x_target_track = []
+    x_start = x0.sample(n_sample, replace=True)[['x','y']].to_numpy()
+
+    for i_fb in range(fb_iter):
+
+        obj = []
+
+        if i_fb > 0:
+            x_target = x_target_track[-1]
+
+        if i_fb % 2 == 0: # forward modeling
+
+            for n in range(n_iter):
+
+                # iteration for drift term
+                x = torch.from_numpy(x_start)
+                ind_check = 1
+                check = True
+                l = torch.tensor(0.)
+                for t_ind in range(nt - 1):
+                    ti = t_grid[t_ind]
+                    tf = t_grid[t_ind + 1]
+                    dt = (tf - ti) / T
+                    inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+                    traj_w = weight_trans(model_f_mn(inp))
+                    v = torch.zeros(n_sample, 2)
+                    traj_id = torch.zeros(n_sample, M)
+                    for n_ind in range(n_sample):
+                        traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
+                        traj_id[n_ind, traj_pick] = 1
+                    for m in range(M):
+                        # v = v + torch.diag(traj_w[:, m]) @ model_f_list[m](inp)
+                        v = v + torch.diag(traj_id[:, m]) @ model_f_list[m](inp)
+                    e = me.sample([n_sample])
+                    x = x + v * dt + np.sqrt(dt) * e
+                    l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
+                    phat = kernel(x, h=h)
+                    pvhat = kernel(v, h=h)
+                    l = l + r_ent_v * dt * (pvhat.log().mean())
+                    if check:
+                        if tf == t_data[ind_check]:
+                            # x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
+                            x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(10 * n_sample, replace=True).to_numpy())
+                            c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
+                            c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
+                            c = c1.pow(2) + c2.pow(2)
+                            weight_pen = weight_trans(model_f_mn(torch.cat([x_check, ti * torch.ones(x_check.shape[0], 1) / T], dim=1)))
+                            c_pen = traj_w * traj_w.log() @ torch.ones(M, x_check.shape[0]) - traj_w @ weight_pen.log().T
+                            c_pen = c_pen + (weight_pen * weight_pen.log() @ torch.ones(M, n_sample) - weight_pen @ traj_w.log().T).T
+                            c_pen = c * c_pen.exp()
+                            cpen_lowk, cpen_rank = c_pen.topk(k=k,dim=1, largest=False)
+                            ctrpen_lowk, ctrpen_rank = c_pen.topk(k=k, dim=0, largest=False)
+                            c_lowk = torch.gather(c, dim=1, index=cpen_rank)
+                            ctr_lowk = torch.gather(c, dim=0, index=ctrpen_rank)
+                            p = kernel_pred(x_check, x, h=h)
+                            l = l - r_kl * p.log().mean()
+                            c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
+                            ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
+                            l = l + r_lock * (torch.max(c_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+                            l = l + r_lock * (torch.max(ctr_lowk - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
+                            if tf == t_data[-1]:
+                                check = False
+                            ind_check += 1
+                        else:
+                            l = l + r_ent * dt * (phat.log().mean())
+                        # l = l + r_ent * dt * (phat.log().mean())
+                    if i_fb > 0:
+                        x_ref = torch.tensor(x_target[t_ind + 1])
+                        l = l + (x - x_ref).pow(2).sum(axis=1).mean()
+                if bool(l.isnan()):
+                    raise ArithmeticError('encountered nan at forward iteration ' + str(i_fb) + ' iteration ' + str(int(n)))
+                if track:
+                    print('c = ', str(float(l)), ' at forward iteration ' + str(i_fb) + ' iteration ' + str(int(n)))
+
+                for m in range(M):
+                    optimizer_f_list[m].zero_grad()
+                optimizer_f_mn.zero_grad()
+                l.backward()
+                for m in range(M):
+                    optimizer_f_list[m].step()
+                optimizer_f_mn.step()
+                obj.append(float(l))
+
+            x = torch.tensor(x0.sample(n_sample, replace=True)[['x']])
+            x_track_temp = []
+            x_track_temp.append(x.detach().numpy())
+            for t_ind in range(nt - 1):
+                ti = t_grid[t_ind]
+                tf = t_grid[t_ind + 1]
+                dt = (tf - ti) / T
+                traj_w = weight_trans(model_f_mn(inp))
+                v = torch.zeros(n_sample, 2)
+                traj_id = torch.zeros(n_sample, M)
+                for n_ind in range(n_sample):
+                    traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
+                    traj_id[n_ind, traj_pick] = 1
+                for m in range(M):
+                    # v = v + torch.diag(traj_w[:, m]) @ model_f_list[m](inp)
+                    v = v + torch.diag(traj_id[:, m]) @ model_f_list[m](inp)
+                e = me.sample([n_sample])
+                x = x + v * dt + np.sqrt(dt) * e
+                x_track_temp.append(x.detach().numpy())
+            x_target_track.append(x_track_temp)
+            x_start = x.detach().numpy()
+
+            obj_f.append(obj)
+
+        else: # backward modeling
+
+            for n in range(n_iter):
+
+                # iteration for drift term
+                x = torch.from_numpy(x_start)
+                ind_check = 1
+                check = True
+                l = torch.tensor(0.)
+                for t_ind in range(nt - 1):
+                    ti = T - t_grid[t_ind]
+                    tf = T - t_grid[t_ind + 1]
+                    dt = (tf - ti) / T
+                    inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+                    traj_w = weight_trans(model_b_mn(inp))
+                    v = torch.zeros(n_sample, 2)
+                    traj_id = torch.zeros(n_sample, M)
+                    for n_ind in range(n_sample):
+                        traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
+                        traj_id[n_ind, traj_pick] = 1
+                    for m in range(M):
+                        # v = v + torch.diag(traj_w[:, m]) @ model_b_list[m](inp)
+                        v = v + torch.diag(traj_id[:, m]) @ model_b_list[m](inp)
+                    e = me.sample([n_sample])
+                    x = x + v * dt + np.sqrt(dt) * e
+                    l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
+                    phat = kernel(x, h=h)
+                    pvhat = kernel(v, h=h)
+                    l = l + r_ent_v * dt * (pvhat.log().mean())
+                    if check:
+                        if tf == t_data[ind_check]:
+                            # x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
+                            x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(10 * n_sample, replace=True).to_numpy())
+                            c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
+                            c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
+                            c = c1.pow(2) + c2.pow(2)
+                            weight_pen = weight_trans(model_b_mn(torch.cat([x_check, ti * torch.ones(x_check.shape[0], 1) / T], dim=1)))
+                            c_pen = traj_w * traj_w.log() @ torch.ones(M, x_check.shape[0]) - traj_w @ weight_pen.log().T
+                            c_pen = c_pen + (weight_pen * weight_pen.log() @ torch.ones(M, n_sample) - weight_pen @ traj_w.log().T).T
+                            c_pen = c * c_pen.exp()
+                            cpen_lowk, cpen_rank = c_pen.topk(k=k,dim=1, largest=False)
+                            ctrpen_lowk, ctrpen_rank = c_pen.topk(k=k, dim=0, largest=False)
+                            c_lowk = torch.gather(c, dim=1, index=cpen_rank)
+                            ctr_lowk = torch.gather(c, dim=0, index=ctrpen_rank)
+                            p = kernel_pred(x_check, x, h=h)
+                            l = l - r_kl * p.log().mean()
+                            c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
+                            ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
+                            l = l + r_lock * (torch.max(c_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+                            l = l + r_lock * (torch.max(ctr_lowk - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
+                            if tf == t_data[-1]:
+                                check = False
+                            ind_check += 1
+                        else:
+                            l = l + r_ent * dt * (phat.log().mean())
+                        # l = l + r_ent * dt * (phat.log().mean())
+                    if i_fb > 0:
+                        x_ref = torch.tensor(x_target[t_ind + 1])
+                        l = l + (x - x_ref).pow(2).sum(axis=1).mean()
+                if bool(l.isnan()):
+                    raise ArithmeticError('encountered nan at backward iteration ' + str(i_fb) + ' iteration ' + str(int(n)))
+                if track:
+                    print('c = ', str(float(l)), ' at backward iteration ' + str(i_fb) + ' iteration ' + str(int(n)))
+                for m in range(M):
+                    optimizer_b_list[m].zero_grad()
+                optimizer_b_mn.zero_grad()
+                l.backward()
+                for m in range(M):
+                    optimizer_b_list[m].step()
+                optimizer_b_mn.step()
+                obj.append(float(l))
+
+            x = torch.tensor(x1.sample(n_sample, replace=True)[['x']])
+            x_track_temp = []
+            x_track_temp.append(x.detach().numpy())
+            for t_ind in range(nt - 1):
+                ti = t_grid[t_ind]
+                tf = t_grid[t_ind + 1]
+                dt = (tf - ti) / T
+                traj_w = weight_trans(model_b_mn(inp))
+                v = torch.zeros(n_sample, 2)
+                traj_id = torch.zeros(n_sample, M)
+                for n_ind in range(n_sample):
+                    traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
+                    traj_id[n_ind, traj_pick] = 1
+                for m in range(M):
+                    # v = v + torch.diag(traj_w[:, m]) @ model_b_list[m](inp)
+                    v = v + torch.diag(traj_id[:, m]) @ model_b_list[m](inp)
+                e = me.sample([n_sample])
+                x = x + v * dt + np.sqrt(dt) * e
+                x_track_temp.append(x.detach().numpy())
+            x_target_track.append(x_track_temp)
+            x_start = x.detach().numpy()
+
+            obj_b.append(obj)
+
+    return {'model_f': model_f_list,
+            'model_b': model_b_list,
+            'optimizer_f': optimizer_f_list,
+            'optimizer_b': optimizer_b_list,
+            'model_f_mn': model_f_mn,
+            'model_b_mn': model_b_mn,
+            'optimizer_f_mn': optimizer_f_mn,
+            'optimizer_b_mn': optimizer_b_mn,
+            'cost_f': obj_f,
+            'cost_b': obj_b}
+
+
 def sim_path_ot(res, x0, T, nt=100, t_check=None, s1=1, s2=1, plot=False, **_):
 
     t_data = res['t_data']
@@ -1231,7 +1485,7 @@ def sim_path_fb_ot(framework, x0, t_check=None, nt=100, s1=1, s2=1, h=None, plot
     return data
 
 
-def sim_path_mixed(res, x0, T, nt=100, t_check=None, s1=1, s2=1, plot=False, **_):
+def sim_path_mixed(res, x0, T, nt=100, t_check=None, s1=1, s2=1, fb=False, plot=False, **_):
 
     t_grid = np.linspace(0, T, nt)
     if t_check is not None:
@@ -1244,8 +1498,12 @@ def sim_path_mixed(res, x0, T, nt=100, t_check=None, s1=1, s2=1, plot=False, **_
     x = torch.tensor(x0)
     ts = [0]
     n_sample = x.shape[0]
-    model_list = res['model_drift']
-    model_mn = res['model_mn']
+    if fb:
+        model_list = res['model_f']
+        model_mn = res['model_f_mn']
+    else:
+        model_list = res['model_drift']
+        model_mn = res['model_mn']
     M = len(model_list)
     for t_ind in range(nt_grid - 1):
         t = t_grid[t_ind]

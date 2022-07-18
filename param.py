@@ -17,6 +17,7 @@ n_seg = 5
 n_sample = 100
 nt_subgrid = 10
 n_mixed = 8
+fb_iter = 10
 
 # simulation setting
 nt = nt_grid
@@ -49,6 +50,7 @@ param_info = {#regularizer
               'n_sample': int,
               'nt_subgrid': int,
               'n_mixed': int,
+              'fb_iter': int,
               # simulation setting
               'nt': int,
               'n_test': int,

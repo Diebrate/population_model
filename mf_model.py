@@ -105,6 +105,9 @@ elif method == 'fb_ot':
 elif method == 'mixed':
     res = nn_framework.train_alg_mfc_mixed(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, plot=True, **param_list)
+elif method == 'fb_mixed':
+    res = nn_framework.train_alg_mfc_fb_mixed(data, T=T, track=True, **param_list)
+    res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
 
 # plt.savefig(img_name)
 # res_sim.to_csv(df_name)
