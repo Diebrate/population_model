@@ -16,8 +16,8 @@ if use_sys:
     setting_id = int(sys.argv[4])
 else:
     time_frac = 1
-    data_name = 'wot'
-    method = 'fbsde'
+    data_name = 'root'
+    method = 'fb_mixed'
     setting_id = 0
 
 np.random.seed(12345)

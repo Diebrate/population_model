@@ -1049,7 +1049,7 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                             c_lowk = torch.gather(c, dim=1, index=cpen_rank)
                             ctr_lowk = torch.gather(c, dim=0, index=ctrpen_rank)
                             p = kernel_pred(x_check, x, h=h)
-                            l = l - r_kl * p.log().mean()
+                            # l = l - r_kl * p.log().mean()
                             c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
                             ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
                             l = l + r_lock * (torch.max(c_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
@@ -1077,7 +1077,7 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                 optimizer_f_mn.step()
                 obj.append(float(l))
 
-            x = torch.tensor(x0.sample(n_sample, replace=True)[['x']])
+            x = torch.tensor(x0.sample(n_sample, replace=True)[['x']].to_numpy())
             x_track_temp = []
             x_track_temp.append(x.detach().numpy())
             for t_ind in range(nt - 1):
@@ -1111,8 +1111,8 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                 check = True
                 l = torch.tensor(0.)
                 for t_ind in range(nt - 1):
-                    ti = T - t_grid[t_ind]
-                    tf = T - t_grid[t_ind + 1]
+                    ti = T - t_grid[-(t_ind + 1)]
+                    tf = T - t_grid[-(t_ind + 2)]
                     dt = (tf - ti) / T
                     inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
                     traj_w = weight_trans(model_b_mn(inp))
@@ -1146,7 +1146,7 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                             c_lowk = torch.gather(c, dim=1, index=cpen_rank)
                             ctr_lowk = torch.gather(c, dim=0, index=ctrpen_rank)
                             p = kernel_pred(x_check, x, h=h)
-                            l = l - r_kl * p.log().mean()
+                            # l = l - r_kl * p.log().mean()
                             c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
                             ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
                             l = l + r_lock * (torch.max(c_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
@@ -1173,12 +1173,12 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                 optimizer_b_mn.step()
                 obj.append(float(l))
 
-            x = torch.tensor(x1.sample(n_sample, replace=True)[['x']])
+            x = torch.tensor(x1.sample(n_sample, replace=True)[['x']].to_numpy())
             x_track_temp = []
             x_track_temp.append(x.detach().numpy())
             for t_ind in range(nt - 1):
-                ti = t_grid[t_ind]
-                tf = t_grid[t_ind + 1]
+                ti = T - t_grid[-(t_ind + 1)]
+                tf = T - t_grid[-(t_ind + 2)]
                 dt = (tf - ti) / T
                 traj_w = weight_trans(model_b_mn(inp))
                 v = torch.zeros(n_sample, 2)
