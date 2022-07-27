@@ -7,6 +7,9 @@ import load
 
 from param import param_info
 
+import time
+start_time = time.time()
+
 use_sys = True
 if use_sys:
     import sys
@@ -17,44 +20,77 @@ if use_sys:
 else:
     time_frac = 1
     data_name = 'root'
-    method = 'fb_mixed'
-    setting_id = 0
+    method = 'fbsde_score'
+    setting_id = -1
 
 np.random.seed(12345)
 
 param_df = pd.read_csv('data/param_multi_setting.csv', index_col=0)
 param_list = param_df.iloc[setting_id].to_dict()
-# param_list = {#regularizer
-#               'r_v': 0.01,
-#               'r_ent': 0.01,
-#               'r_ent_v' : 1,
-#               'r_kl': 0.1,
-#               'r_lock': 5,
-#               'reg': 0.01,
-#               'reg1': 50,
-#               'reg2': 50,
-#               'k': 10,
-#               'lock_dist': 0.001,
-#               # model setting
-#               'nt_grid': 200,
-#               'n_seg': 5,
-#               'n_sample': 200,
-#               'nt_subgrid': 10,
-#               'n_mixed': 10,
-#               'fb_iter': 10,
-#               # simulation setting
-#               'nt': 200,
-#               'n_test': 1000,
-#               's1': 0.05,
-#               's2': 0.05,
-#               'h': 0,
-#               # optimization
-#               'lr': 0.001,
-#               'n_iter': 128,
-#               # mc
-#               'M': 20,
-#               # setting id
-#               'setting_id': 0}
+if setting_id == -1: # default for wot
+    param_list = {#regularizer
+                  'r_v': 0.1,
+                  'r_ent': 1,
+                  'r_ent_v' : 1,
+                  'r_kl': 5,
+                  'r_lock': 10,
+                  'reg': 0.01,
+                  'reg1': 50,
+                  'reg2': 50,
+                  'k': 5,
+                  'lock_dist': 0.001,
+                  # model setting
+                  'nt_grid': 200,
+                  'n_seg': 5,
+                  'n_sample': 100,
+                  'nt_subgrid': 10,
+                  'n_mixed': 10,
+                  'fb_iter': 100,
+                  # simulation setting
+                  'nt': 100,
+                  'n_test': 100,
+                  's1': 0.01,
+                  's2': 0.01,
+                  'h': 1,
+                  # optimization
+                  'lr': 0.001,
+                  'n_iter': 100,
+                  # mc
+                  'M': 20,
+                  # setting id
+                  'setting_id': 0}
+elif setting_id == -2: # default for root
+    param_list = {#regularizer
+                  'r_v': 0.1,
+                  'r_ent': 1,
+                  'r_ent_v' : 1,
+                  'r_kl': 5,
+                  'r_lock': 10,
+                  'reg': 0.01,
+                  'reg1': 50,
+                  'reg2': 50,
+                  'k': 5,
+                  'lock_dist': 0.001,
+                  # model setting
+                  'nt_grid': 200,
+                  'n_seg': 5,
+                  'n_sample': 100,
+                  'nt_subgrid': 10,
+                  'n_mixed': 10,
+                  'fb_iter': 100,
+                  # simulation setting
+                  'nt': 100,
+                  'n_test': 100,
+                  's1': 0.01,
+                  's2': 0.01,
+                  'h': 0,
+                  # optimization
+                  'lr': 0.001,
+                  'n_iter': 100,
+                  # mc
+                  'M': 20,
+                  # setting id
+                  'setting_id': 0}
 for name, info in param_info.items():
     param_list[name] = info(param_list[name])
 if param_list['h'] == 0:
@@ -86,7 +122,7 @@ t_check = t_check[t_check > 0]
 
 if method == 'ot':
     res = nn_framework.train_alg_mfc_ot(data, T=T, track=True, **param_list)
-    res_sim = nn_framework.sim_path_ot(res, x0, t_check=t_check, plot=True, **param_list)
+    res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, **param_list)
 elif method == 'force':
     res = nn_framework.train_alg_mfc_force(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_force(res['model'], x0, T=T, data_full=data, t_check=t_check, plot=True, **param_list)
@@ -95,6 +131,9 @@ elif method == 'soft':
     res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, **param_list)
 elif method == 'fbsde':
     res = nn_framework.train_alg_mfc_fbsde(data, T=T, track=True, **param_list)
+    res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, **param_list)
+elif method == 'fbsde_score':
+    res = nn_framework.train_alg_mfc_fbsde(data, T=T, track=True, use_score=True, **param_list)
     res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, **param_list)
 elif method == 'soft_seg':
     res = nn_framework.train_alg_mfc_soft_seg(data, T=T, track=True, **param_list)
@@ -108,9 +147,15 @@ elif method == 'mixed':
 elif method == 'fb_mixed':
     res = nn_framework.train_alg_mfc_fb_mixed(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
+elif method == 'fb_mixed_score':
+    res = nn_framework.train_alg_mfc_fb_mixed(data, T=T, track=True, use_score=True, **param_list)
+    res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
 
-# plt.savefig(img_name)
-# res_sim.to_csv(df_name)
-
+df_name = 'data/sim/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '.csv'
 save_name = 'image/sim/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '.png'
 plt.savefig(save_name)
+res_sim.to_csv(df_name)
+
+# data_all.loc[(data_all.time == 0)|(data_all.time == T)].plot.scatter('x', 'y', xlim=(-10, 40), ylim=(-10, 40), s=1, c='time', cmap='Spectral')
+
+print("--- %s seconds ---" % (time.time() - start_time))

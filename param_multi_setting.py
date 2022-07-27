@@ -89,10 +89,10 @@ r_ent_list = [0.1, 1, 10]
 r_ent_v_list = [0.1, 1, 10]
 r_kl_list = [0.1, 1, 10]
 r_lock_list = [0.1, 1, 10]
-lock_dist_list = [0.001, 0.01, 0.1, 1]
+lock_dist_list = [0.001, 0.01, 0.1]
 k_list = [3, 5, 10]
 n_mixed_list = [4, 8, 16]
-fb_iter_list = [5, 10, 20]
+fb_iter_list = [10, 25, 50]
 
 setting_id = 1
 for ent in r_ent_list:

@@ -7,12 +7,28 @@ from torch import nn
 
 import ot
 
-
 def tensor_cost(x, y):
     c1 = x[:, 0].reshape(-1, 1) - y[:, 0]
     c2 = x[:, 1].reshape(-1, 1) - y[:, 1]
     c = c1.pow(2) + c2.pow(2)
     return c
+
+
+def score_est(x, y, h=None):
+    if h is None:
+        h = x.T.cov() * (x.shape[0] ** (-1 / 6))
+        # h = x.T.cov() / x.shape[0]
+        h = h.detach().numpy()
+    h = np.linalg.inv(h)
+    c1 = x[:, 0].reshape(-1, 1) - y[:, 0]
+    c2 = x[:, 1].reshape(-1, 1) - y[:, 1]
+    c = h[0, 0] * c1.pow(2) + (h[0, 1] + h[1, 0]) * c1 * c2 + h[1, 1] * c2.pow(2)
+    c = torch.exp(-0.5 * c)
+    score_num = torch.rand(y.shape[0], 2)
+    score_num[:, 0] = ((h[0, 0] * c1 + 0.5 * (h[0, 1] + h[1, 0]) * c2) * c).sum(axis=0)
+    score_num[:, 1] = ((h[1, 1] * c2 + 0.5 * (h[0, 1] + h[1, 0]) * c1) * c).sum(axis=0)
+    score_denom = torch.diag(1 / c.sum(axis=0))
+    return score_denom.float() @ score_num.float()
 
 
 def kernel(x, h=None):
@@ -70,8 +86,8 @@ def train_alg_est_func(nn_model, x, y, lr=0.05, n_iter=1000):
 def train_alg_mfc_ot(data, T, lr=0.001,
                      n_sample=100, n_iter=128, nt_grid=100,
                      s1=1, s2=1,
-                     h=None,
-                     r_v=0.01, r_ent=0.1, r_ent_v=1, r_lock=1,
+                     h=None, k=5, lock_dist=0.01,
+                     r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1,
                      reg=1, reg1=1, reg2=1,
                      track=False, **_):
 
@@ -81,14 +97,13 @@ def train_alg_mfc_ot(data, T, lr=0.001,
     t_grid.sort()
     nt_data = t_data.shape[0]
     nt_model = t_grid.shape[0]
-    n_ref = n_sample * 3
-    dirac = np.repeat(1, n_ref) / n_ref
+    dirac = np.repeat(1, n_sample) / n_sample
     tmap = []
     start_loc = []
     end_loc = []
     for i in range(nt_data - 1):
-        data0 = data[data.time == t_data[i]][['x', 'y']].sample(n_ref, replace=True).to_numpy()
-        data1 = data[data.time == t_data[i + 1]][['x', 'y']].sample(n_ref, replace=True).to_numpy()
+        data0 = data[data.time == t_data[i]][['x', 'y']].sample(n_sample, replace=True).to_numpy()
+        data1 = data[data.time == t_data[i + 1]][['x', 'y']].sample(n_sample, replace=True).to_numpy()
         costm = ot.compute_dist(data0, data1, dim=2, single=False)
         start_loc.append(data0)
         reg_list = (100 - reg) * np.exp(-np.arange(100)) + reg
@@ -96,8 +111,8 @@ def train_alg_mfc_ot(data, T, lr=0.001,
         tmap.append(tmap_temp)
         tmap_norm = tmap_temp.copy()
         tmap_norm = np.diag(1 / tmap_norm.sum(axis=1)) @ tmap_norm
-        end_loc.append(tmap_norm @ data1)
-        # end_loc.append(data1[tmap_norm.argmax(axis=1)])
+        # end_loc.append(tmap_norm @ data1)
+        end_loc.append(data1[tmap_norm.argmax(axis=1)])
 
     model = NeuralNetwork(3, 2, 100)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
@@ -105,20 +120,13 @@ def train_alg_mfc_ot(data, T, lr=0.001,
     me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2),
                                                                     torch.tensor(np.diag([s1, s2])).float())
 
-    x0 = data[data.time == 0]
-
-    x_tensor = []
-
-    for t in t_data:
-        x_tensor.append(torch.from_numpy(data[data.time == t][['x','y']].to_numpy()))
-
     obj = []
 
     for n in range(n_iter):
 
         l = torch.tensor(0.)
 
-        x = torch.from_numpy(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
+        x = torch.from_numpy(start_loc[0])
         ind_check = 1
 
         check = True
@@ -127,42 +135,33 @@ def train_alg_mfc_ot(data, T, lr=0.001,
             tf = t_grid[t_ind + 1]
             dt = (tf - ti) / T
             inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+            v = model(inp)
             e = me.sample([n_sample])
-            if check:
-                if ind_check < nt_data:
-                    if ti == t_data[ind_check - 1]:
-                        tc0 = t_data[ind_check - 1]
-                        tc1 = t_data[ind_check]
-                        start = torch.tensor(start_loc[ind_check - 1])
-                        end = torch.tensor(end_loc[ind_check - 1])
-                        ind_check += 1
-                else:
-                    check = False
-                gamma = (tf - tc0) / (tc1 - tc0)
-                if gamma < 0 or gamma > 1:
-                    raise ArithmeticError('encountered wrong gamma (gamma = ' + str(gamma) + ')')
-                x_start = (1 - gamma) * start + gamma * end
-                cdist = tensor_cost(x, x_start)
-                end_ind = cdist.argmin(axis=1)
-                # kern_weight = kernel_weight(x, x_start)
-                # kern_weight = kern_weight.detach().numpy()
-                # end_ind = []
-                # for j in range(n_sample):
-                #     end_ind.append(np.random.choice(np.arange(n_ref), p=kern_weight[j, :]))
-                # x_end = end[end_ind]
-                # x_end = kern_weight @ end
-                v_free = model(inp)
-                v_ref = (x_start[end_ind] - x) / dt - v_free
-                v = v_free + gamma * v_ref
-                l = l + r_lock * (x_start[end_ind] - x).pow(2).sum(axis=1).mean()
-            else:
-                v = model(inp)
-            l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
             x = x + v * dt + np.sqrt(dt) * e
+            l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
             phat = kernel(x, h=h)
-            pvhat = kernel(v)
-            l = l + r_ent * dt * phat.log().mean()
+            pvhat = kernel(v, h=h)
             l = l + r_ent_v * dt * pvhat.log().mean()
+            if check:
+                if tf == t_data[ind_check]:
+                    x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
+                    # x_support = torch.from_numpy(data.sample(1000)[['x', 'y']].to_numpy())
+                    c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
+                    c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
+                    c = c1.pow(2) + c2.pow(2)
+                    p = kernel_pred(x_check, x, h=h)
+                    l = l - r_kl * p.log().mean()
+                    c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
+                    ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
+                    l = l + r_lock * (torch.max(c_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+                    l = l + r_lock * (torch.max(ctr_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
+                    x_ref = torch.tensor(end_loc[ind_check - 1])
+                    l = l + (x - x_ref).pow(2).sum(axis=1).mean()
+                    if tf == t_data[-1]:
+                        check = False
+                    ind_check += 1
+                else:
+                    l = l + r_ent * dt * (phat.log().mean())
 
         optimizer.zero_grad()
         l.backward()
@@ -360,7 +359,7 @@ def train_alg_mfc_soft(data, T, lr=0.001,
 def train_alg_mfc_fbsde(data, T, lr=0.001,
                         n_sample=100, n_iter=128, nt_grid=100, fb_iter=10,
                         s1=1, s2=1,
-                        h=None, k=5, lock_dist=0.01,
+                        h=None, k=5, lock_dist=0.01, use_score=False,
                         r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1,
                         track=False, **_):
 
@@ -417,24 +416,22 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
                     l = l + r_ent_v * dt * (pvhat.log().mean())
                     if check:
                         if tf == t_data[ind_check]:
-                            x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
+                            x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample, replace=True).to_numpy())
                             # x_support = torch.from_numpy(data.sample(1000)[['x', 'y']].to_numpy())
                             c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
                             c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
                             c = c1.pow(2) + c2.pow(2)
-                            # prop_in = torch.diag(1 / c.sum(axis=1)) @ c
                             p = kernel_pred(x_check, x, h=h)
-                            l = l + r_kl * (phat.log() - p.log()).mean()
+                            l = l - r_kl * p.log().mean()
                             c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
                             ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
-                            l = l + r_lock * (torch.max(c_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
-                            l = l + r_lock * (torch.max(ctr_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
+                            l = l + r_lock * (torch.max(c_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+                            l = l + r_lock * (torch.max(ctr_lowk - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
                             if tf == t_data[-1]:
                                 check = False
                             ind_check += 1
                         else:
                             l = l + r_ent * dt * (phat.log().mean())
-                        # l = l + r_ent * dt * (phat.log().mean())
                     if i_fb > 0:
                         x_ref = torch.tensor(x_target[t_ind + 1])
                         l = l + (x - x_ref).pow(2).sum(axis=1).mean()
@@ -449,20 +446,37 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
                 optimizer_f.step()
                 obj.append(float(l))
 
-            x = torch.tensor(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
-            x_track_temp = []
-            x_track_temp.append(x.detach().numpy())
-            for t_ind in range(nt - 1):
-                ti = t_grid[t_ind]
-                tf = t_grid[t_ind + 1]
-                dt = (tf - ti) / T
-                inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
-                v = model_f(inp)
-                e = me.sample([n_sample])
-                x = x + v * dt + np.sqrt(dt) * e
+            if use_score:
+                x = torch.tensor(x1.sample(n_sample, replace=True)[['x','y']].to_numpy())
+                x_start = x.detach().numpy()
+                x_track_temp = []
                 x_track_temp.append(x.detach().numpy())
-            x_target_track.append(x_track_temp)
-            x_start = x.detach().numpy()
+                for t_ind in range(nt - 1):
+                    ti = t_grid[-(t_ind + 1)]
+                    tf = t_grid[-(t_ind + 2)]
+                    dt = (ti - tf) / T
+                    inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+                    v = model_f(inp)
+                    e = me.sample([n_sample])
+                    score = score_est(x, x, h=h)
+                    x = x + (v - s1 * score) * dt + np.sqrt(dt) * e
+                    x_track_temp.append(x.detach().numpy())
+                x_target_track.append(x_track_temp)
+            else:
+                x = torch.tensor(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
+                x_track_temp = []
+                x_track_temp.append(x.detach().numpy())
+                for t_ind in range(nt - 1):
+                    ti = t_grid[t_ind]
+                    tf = t_grid[t_ind + 1]
+                    dt = (tf - ti) / T
+                    inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+                    v = model_f(inp)
+                    e = me.sample([n_sample])
+                    x = x + v * dt + np.sqrt(dt) * e
+                    x_track_temp.append(x.detach().numpy())
+                x_target_track.append(x_track_temp[::-1])
+                x_start = x.detach().numpy()
 
             obj_f.append(obj)
 
@@ -488,25 +502,23 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
                     pvhat = kernel(v, h=h)
                     l = l + r_ent_v * dt * (pvhat.log().mean())
                     if check:
-                        if tf == t_data[ind_check]:
-                            x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
-                            # x_support = torch.from_numpy(data.sample(1000)[['x', 'y']].to_numpy())
+                        if tf == t_data[-(ind_check + 1)]:
+                            x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample, replace=True).to_numpy())
                             c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
                             c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
                             c = c1.pow(2) + c2.pow(2)
-                            # prop_in = torch.diag(1 / c.sum(axis=1)) @ c
                             p = kernel_pred(x_check, x, h=h)
-                            l = l + r_kl * (phat.log() - p.log()).mean()
+                            l = l - r_kl * p.log().mean()
                             c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
                             ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
-                            l = l + r_lock * (torch.max(c_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
-                            l = l + r_lock * (torch.max(ctr_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
-                            if tf == t_data[-1]:
+                            l = l + r_lock * (torch.max(c_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+                            l = l + r_lock * (torch.max(ctr_lowk - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
+                            if tf == t_data[0]:
                                 check = False
                             ind_check += 1
                         else:
+                            pass
                             l = l + r_ent * dt * (phat.log().mean())
-                        # l = l + r_ent * dt * (phat.log().mean())
                     if i_fb > 0:
                         x_ref = torch.tensor(x_target[t_ind + 1])
                         l = l + (x - x_ref).pow(2).sum(axis=1).mean()
@@ -521,20 +533,37 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
                 optimizer_b.step()
                 obj.append(float(l))
 
-            x = torch.tensor(x1.sample(n_sample, replace=True)[['x','y']].to_numpy())
-            x_track_temp = []
-            x_track_temp.append(x.detach().numpy())
-            for t_ind in range(nt - 1):
-                ti = T - t_grid[-(t_ind + 1)]
-                tf = T - t_grid[-(t_ind + 2)]
-                dt = (tf - ti) / T
-                inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
-                v = model_b(inp)
-                e = me.sample([n_sample])
-                x = x + v * dt + np.sqrt(dt) * e
+            if use_score:
+                x = torch.tensor(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
+                x_start = x.detach().numpy()
+                x_track_temp = []
                 x_track_temp.append(x.detach().numpy())
-            x_target_track.append(x_track_temp)
-            x_start = x.detach().numpy()
+                for t_ind in range(nt - 1):
+                    ti = t_grid[t_ind]
+                    tf = t_grid[t_ind + 1]
+                    dt = (tf - ti) / T
+                    inp = torch.cat([x, (T - ti) * torch.ones(n_sample, 1) / T], dim=1)
+                    v = model_b(inp)
+                    e = me.sample([n_sample])
+                    score = score_est(x, x, h=h)
+                    x = x + (v + s1 * score) * dt + np.sqrt(dt) * e
+                    x_track_temp.append(x.detach().numpy())
+                x_target_track.append(x_track_temp)
+            else:
+                x = torch.tensor(x1.sample(n_sample, replace=True)[['x','y']].to_numpy())
+                x_track_temp = []
+                x_track_temp.append(x.detach().numpy())
+                for t_ind in range(nt - 1):
+                    ti = T - t_grid[-(t_ind + 1)]
+                    tf = T - t_grid[-(t_ind + 2)]
+                    dt = (tf - ti) / T
+                    inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+                    v = model_b(inp)
+                    e = me.sample([n_sample])
+                    x = x + v * dt + np.sqrt(dt) * e
+                    x_track_temp.append(x.detach().numpy())
+                x_target_track.append(x_track_temp[::-1])
+                x_start = x.detach().numpy()
 
             obj_b.append(obj)
 
@@ -954,7 +983,7 @@ def train_alg_mfc_mixed(data, T, lr=0.001, n_mixed=5,
 def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                            n_sample=100, n_iter=128, nt_grid=100, fb_iter=5,
                            s1=1, s2=1,
-                           h=None, k=5, lock_dist=0.01,
+                           h=None, k=5, lock_dist=0.01, use_score=False,
                            r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1,
                            track=False, **_):
 
@@ -1049,7 +1078,7 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                             c_lowk = torch.gather(c, dim=1, index=cpen_rank)
                             ctr_lowk = torch.gather(c, dim=0, index=ctrpen_rank)
                             p = kernel_pred(x_check, x, h=h)
-                            # l = l - r_kl * p.log().mean()
+                            l = l - r_kl * p.log().mean()
                             c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
                             ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
                             l = l + r_lock * (torch.max(c_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
@@ -1059,7 +1088,6 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                             ind_check += 1
                         else:
                             l = l + r_ent * dt * (phat.log().mean())
-                        # l = l + r_ent * dt * (phat.log().mean())
                     if i_fb > 0:
                         x_ref = torch.tensor(x_target[t_ind + 1])
                         l = l + (x - x_ref).pow(2).sum(axis=1).mean()
@@ -1077,27 +1105,53 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                 optimizer_f_mn.step()
                 obj.append(float(l))
 
-            x = torch.tensor(x0.sample(n_sample, replace=True)[['x']].to_numpy())
-            x_track_temp = []
-            x_track_temp.append(x.detach().numpy())
-            for t_ind in range(nt - 1):
-                ti = t_grid[t_ind]
-                tf = t_grid[t_ind + 1]
-                dt = (tf - ti) / T
-                traj_w = weight_trans(model_f_mn(inp))
-                v = torch.zeros(n_sample, 2)
-                traj_id = torch.zeros(n_sample, M)
-                for n_ind in range(n_sample):
-                    traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
-                    traj_id[n_ind, traj_pick] = 1
-                for m in range(M):
-                    # v = v + torch.diag(traj_w[:, m]) @ model_f_list[m](inp)
-                    v = v + torch.diag(traj_id[:, m]) @ model_f_list[m](inp)
-                e = me.sample([n_sample])
-                x = x + v * dt + np.sqrt(dt) * e
+            if use_score:
+                x = torch.tensor(x1.sample(n_sample, replace=True)[['x','y']].to_numpy())
+                x_start = x.detach().numpy()
+                x_track_temp = []
                 x_track_temp.append(x.detach().numpy())
-            x_target_track.append(x_track_temp)
-            x_start = x.detach().numpy()
+                for t_ind in range(nt - 1):
+                    ti = t_grid[-(t_ind + 1)]
+                    tf = t_grid[-(t_ind + 2)]
+                    dt = (ti - tf) / T
+                    inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+                    traj_w = weight_trans(model_f_mn(inp))
+                    v = torch.zeros(n_sample, 2)
+                    traj_id = torch.zeros(n_sample, M)
+                    for n_ind in range(n_sample):
+                        traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
+                        traj_id[n_ind, traj_pick] = 1
+                    for m in range(M):
+                        # v = v + torch.diag(traj_w[:, m]) @ model_f_list[m](inp)
+                        v = v + torch.diag(traj_id[:, m]) @ model_f_list[m](inp)
+                    e = me.sample([n_sample])
+                    score = score_est(x, x, h=h)
+                    x = x + (v - s1 * score) * dt + np.sqrt(dt) * e
+                    x_track_temp.append(x.detach().numpy())
+                x_target_track.append(x_track_temp)
+            else:
+                x = torch.tensor(x0.sample(n_sample, replace=True)[['x']].to_numpy())
+                x_track_temp = []
+                x_track_temp.append(x.detach().numpy())
+                for t_ind in range(nt - 1):
+                    ti = t_grid[t_ind]
+                    tf = t_grid[t_ind + 1]
+                    dt = (tf - ti) / T
+                    inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+                    traj_w = weight_trans(model_f_mn(inp))
+                    v = torch.zeros(n_sample, 2)
+                    traj_id = torch.zeros(n_sample, M)
+                    for n_ind in range(n_sample):
+                        traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
+                        traj_id[n_ind, traj_pick] = 1
+                    for m in range(M):
+                        # v = v + torch.diag(traj_w[:, m]) @ model_f_list[m](inp)
+                        v = v + torch.diag(traj_id[:, m]) @ model_f_list[m](inp)
+                    e = me.sample([n_sample])
+                    x = x + v * dt + np.sqrt(dt) * e
+                    x_track_temp.append(x.detach().numpy())
+                x_target_track.append(x_track_temp[::-1])
+                x_start = x.detach().numpy()
 
             obj_f.append(obj)
 
@@ -1128,10 +1182,10 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                     x = x + v * dt + np.sqrt(dt) * e
                     l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
                     phat = kernel(x, h=h)
-                    pvhat = kernel(v, h=h)
+                    pvhat = kernel(-v, h=h)
                     l = l + r_ent_v * dt * (pvhat.log().mean())
                     if check:
-                        if tf == t_data[ind_check]:
+                        if tf == t_data[-(ind_check + 1)]:
                             # x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
                             x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(10 * n_sample, replace=True).to_numpy())
                             c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
@@ -1146,17 +1200,16 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                             c_lowk = torch.gather(c, dim=1, index=cpen_rank)
                             ctr_lowk = torch.gather(c, dim=0, index=ctrpen_rank)
                             p = kernel_pred(x_check, x, h=h)
-                            # l = l - r_kl * p.log().mean()
+                            l = l - r_kl * p.log().mean()
                             c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
                             ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
                             l = l + r_lock * (torch.max(c_lowk - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
                             l = l + r_lock * (torch.max(ctr_lowk - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
-                            if tf == t_data[-1]:
+                            if tf == t_data[0]:
                                 check = False
                             ind_check += 1
                         else:
                             l = l + r_ent * dt * (phat.log().mean())
-                        # l = l + r_ent * dt * (phat.log().mean())
                     if i_fb > 0:
                         x_ref = torch.tensor(x_target[t_ind + 1])
                         l = l + (x - x_ref).pow(2).sum(axis=1).mean()
@@ -1173,27 +1226,53 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
                 optimizer_b_mn.step()
                 obj.append(float(l))
 
-            x = torch.tensor(x1.sample(n_sample, replace=True)[['x']].to_numpy())
-            x_track_temp = []
-            x_track_temp.append(x.detach().numpy())
-            for t_ind in range(nt - 1):
-                ti = T - t_grid[-(t_ind + 1)]
-                tf = T - t_grid[-(t_ind + 2)]
-                dt = (tf - ti) / T
-                traj_w = weight_trans(model_b_mn(inp))
-                v = torch.zeros(n_sample, 2)
-                traj_id = torch.zeros(n_sample, M)
-                for n_ind in range(n_sample):
-                    traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
-                    traj_id[n_ind, traj_pick] = 1
-                for m in range(M):
-                    # v = v + torch.diag(traj_w[:, m]) @ model_b_list[m](inp)
-                    v = v + torch.diag(traj_id[:, m]) @ model_b_list[m](inp)
-                e = me.sample([n_sample])
-                x = x + v * dt + np.sqrt(dt) * e
+            if use_score:
+                x = torch.tensor(x0.sample(n_sample, replace=True)[['x','y']].to_numpy())
+                x_start = x.detach().numpy()
+                x_track_temp = []
                 x_track_temp.append(x.detach().numpy())
-            x_target_track.append(x_track_temp)
-            x_start = x.detach().numpy()
+                for t_ind in range(nt - 1):
+                    ti = t_grid[t_ind]
+                    tf = t_grid[t_ind + 1]
+                    dt = (tf - ti) / T
+                    inp = torch.cat([x, (T - ti) * torch.ones(n_sample, 1) / T], dim=1)
+                    traj_w = weight_trans(model_b_mn(inp))
+                    v = torch.zeros(n_sample, 2)
+                    traj_id = torch.zeros(n_sample, M)
+                    for n_ind in range(n_sample):
+                        traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
+                        traj_id[n_ind, traj_pick] = 1
+                    for m in range(M):
+                        # v = v + torch.diag(traj_w[:, m]) @ model_b_list[m](inp)
+                        v = v + torch.diag(traj_id[:, m]) @ model_b_list[m](inp)
+                    e = me.sample([n_sample])
+                    score = score_est(x, x, h=h)
+                    x = x + (v + s1 * score) * dt + np.sqrt(dt) * e
+                    x_track_temp.append(x.detach().numpy())
+                x_target_track.append(x_track_temp)
+            else:
+                x = torch.tensor(x1.sample(n_sample, replace=True)[['x']].to_numpy())
+                x_track_temp = []
+                x_track_temp.append(x.detach().numpy())
+                for t_ind in range(nt - 1):
+                    ti = T - t_grid[-(t_ind + 1)]
+                    tf = T - t_grid[-(t_ind + 2)]
+                    dt = (tf - ti) / T
+                    inp = torch.cat([x, ti * torch.ones(n_sample, 1) / T], dim=1)
+                    traj_w = weight_trans(model_b_mn(inp))
+                    v = torch.zeros(n_sample, 2)
+                    traj_id = torch.zeros(n_sample, M)
+                    for n_ind in range(n_sample):
+                        traj_pick = np.random.choice(np.arange(M), p=traj_w[n_ind, :].detach().numpy())
+                        traj_id[n_ind, traj_pick] = 1
+                    for m in range(M):
+                        # v = v + torch.diag(traj_w[:, m]) @ model_b_list[m](inp)
+                        v = v + torch.diag(traj_id[:, m]) @ model_b_list[m](inp)
+                    e = me.sample([n_sample])
+                    x = x + v * dt + np.sqrt(dt) * e
+                    x_track_temp.append(x.detach().numpy())
+                x_target_track.append(x_track_temp[::-1])
+                x_start = x.detach().numpy()
 
             obj_b.append(obj)
 
@@ -1531,11 +1610,11 @@ class NeuralNetwork(nn.Module):
         super().__init__()
         self.flatten = nn.Flatten()
         self.flow = nn.Sequential(nn.Linear(d_in, d_hid),
-                                  nn.ELU(),
+                                  nn.ReLU(),
                                   nn.Linear(d_hid, d_hid),
-                                  nn.ELU(),
+                                  nn.ReLU(),
                                   nn.Linear(d_hid, d_hid),
-                                  nn.ELU(),
+                                  nn.ReLU(),
                                   nn.Linear(d_hid, d_out))
 
 

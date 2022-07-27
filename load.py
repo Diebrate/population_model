@@ -2,7 +2,7 @@ import numpy as np
 import pyreadr
 import pandas as pd
 
-def load(data_name, frac=1):
+def load(data_name, frac=1, **kwargs):
     if data_name == 'root':
         # root data
         data_all = pyreadr.read_r('data/data.rds')
@@ -47,7 +47,7 @@ def load(data_name, frac=1):
                             exp_comp * 2 * x2 / np.power(s, 2) - x2])
             f = 10 * exp_comp * np.array([[np.cos(theta), -np.sin(theta)],
                                           [np.sin(theta), np.cos(theta)]]) @ np.array([[x1],
-                                                                                       [x2]]) 
+                                                                                       [x2]])
             return phi + f.flatten()
         n_steps = 10
         tau = 1 / n_steps
@@ -61,10 +61,36 @@ def load(data_name, frac=1):
         data_all = pd.DataFrame(data_all)
         data_all.columns = ['x', 'y']
         data_all['time'] = np.repeat(np.linspace(0, 0.01, n_steps + 1), 5000)
-    
+    elif data_name in [str(i) for i in np.arange(10)]:
+        from keras.datasets import mnist
+        (train_X, train_y), (test_X, test_y) = mnist.load_data()
+        value = int(data_name)
+        ind = train_y == value
+        # start with a point and end with a digit image
+        cov = np.array([[1, 0], [0, 1]])
+        theta = np.random.uniform(low=0, high=2 * np.pi, size=10000)
+        start = np.vstack((20 * np.cos(theta) + 14, 20 * np.sin(theta) + 14)).T
+        # start = np.random.multivariate_normal(mean=[0, 0], cov=cov, size=10000) * 1
+        end = mnist_scatter(train_X[ind][0])
+        data_all = pd.DataFrame(np.vstack((start, end)))
+        data_all.columns = ['x', 'y']
+        data_all['time'] = np.concatenate((np.repeat(0, 10000), np.repeat(1, end.shape[0])))
     if frac != 1:
         data_all = data_all.sample(frac=0.7, replace=False)
-        
+
     T = data_all.time.max()
-    
+
     return data_all, T
+
+
+def mnist_scatter(img):
+    ylim, xlim = img.shape
+    data = np.zeros((0, 2))
+    for i in range(ylim):
+        for j in range(xlim):
+            count = int(img[i, j])
+            for k in range(count):
+                x = np.random.uniform(low=j, high=j + 1)
+                y = np.random.uniform(low=ylim - i - 2, high=ylim - i - 1)
+                data = np.vstack((data, np.array([x, y])))
+    return data

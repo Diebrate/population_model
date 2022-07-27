@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 import ot
 import load
 
+import time
+start_time = time.time()
+
 data_name = 'syn'
 time_frac = 1
 
@@ -28,34 +31,34 @@ else:
     reg2 = 50
     k = 3
     lock_dist = 0.01
-    
+
     # model setting
     nt_grid = 250
     n_seg = 5
     n_sample = 250
     nt_subgrid = 10
-    
+
     # simulation setting
     nt = nt_grid
     n_test = 1000
-    
+
     e_s1 = 0.005
     e_s2 = 0.005
     # h = None
     h = np.diag(np.ones(2)) * 1
-    
+
     lr = 0.001
     n_iter = 100
 #################################
 
-img_name = 'image/' + data_name + '_sim_r' + str(r_v).replace('.', '_') + '_r' +  str(r_ent).replace('.', '_') + '_r' + str(r_kl).replace('.', '_') + '.png' 
+img_name = 'image/' + data_name + '_sim_r' + str(r_v).replace('.', '_') + '_r' +  str(r_ent).replace('.', '_') + '_r' + str(r_kl).replace('.', '_') + '.png'
 print(img_name)
 
-df_name = 'data/' + data_name + '_sim_r' + str(r_v).replace('.', '_') + '_r' +  str(r_ent).replace('.', '_') + '_r' + str(r_kl).replace('.', '_') + '.csv' 
+df_name = 'data/' + data_name + '_sim_r' + str(r_v).replace('.', '_') + '_r' +  str(r_ent).replace('.', '_') + '_r' + str(r_kl).replace('.', '_') + '.csv'
 print(df_name)
 
 data_all, T = load.load(data_name)
-    
+
 t_full = data_all.time.unique()
 t_trim = np.random.choice(t_full, size=int(time_frac * t_full.shape[0]), replace=False)
 t_trim = np.concatenate(([0], t_trim, [t_full.max()]))
@@ -107,7 +110,7 @@ for i in range(nt_sim - 1):
     gamma = (tf - t_start) / (t_end - t_start)
     x = (1 - gamma) * x_start + gamma * x_end
     res = np.vstack((res, x))
-    
+
 res = np.hstack((res, np.repeat(t_sim, n_test).reshape(-1, 1)))
 res = pd.DataFrame(res, columns=['x', 'y', 'time'])
 
@@ -115,3 +118,5 @@ res.plot.scatter(x='x', y='y', c='time', cmap='Spectral', s=1, figsize=(10, 8))
 # plt.savefig(img_name)
 
 # res.to_csv(df_name)
+
+print("--- %s seconds ---" % (time.time() - start_time))
