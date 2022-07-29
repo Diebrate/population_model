@@ -1617,7 +1617,6 @@ class NeuralNetwork(nn.Module):
                                   nn.ReLU(),
                                   nn.Linear(d_hid, d_out))
 
-
     def forward(self, x):
         x = self.flatten(x)
         return self.flow(x.float())

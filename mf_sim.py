@@ -1,30 +1,16 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import torch
+from torch import nn
 
-import nn_framework
 import load
-
 from param import param_info
+import nn_framework
 
-import time
-start_time = time.time()
-
-save_model = True
-use_sys = True
-if use_sys:
-    import sys
-    time_frac = float(sys.argv[1])
-    data_name = str(sys.argv[2])
-    method = str(sys.argv[3])
-    setting_id = int(sys.argv[4])
-else:
-    time_frac = 1
-    data_name = 'root'
-    method = 'fbsde_score'
-    setting_id = -1
-
-np.random.seed(12345)
+time_frac = 1.0
+data_name = 'root'
+method = 'fbsde_score'
+setting_id = -2
 
 param_df = pd.read_csv('data/param_multi_setting.csv', index_col=0)
 param_list = param_df.iloc[setting_id].to_dict()
@@ -48,8 +34,8 @@ if setting_id == -1: # default for wot
                   'n_mixed': 10,
                   'fb_iter': 100, # 100
                   # simulation setting
-                  'nt': 100,
-                  'n_test': 100,
+                  'nt': 200,
+                  'n_test': 200,
                   's1': 0.01,
                   's2': 0.01,
                   'h': 1,
@@ -80,8 +66,8 @@ elif setting_id == -2: # default for root
                   'n_mixed': 10,
                   'fb_iter': 100, # 100
                   # simulation setting
-                  'nt': 100,
-                  'n_test': 100,
+                  'nt': 200,
+                  'n_test': 200,
                   's1': 0.01,
                   's2': 0.01,
                   'h': 0,
@@ -92,6 +78,7 @@ elif setting_id == -2: # default for root
                   'M': 20,
                   # setting id
                   'setting_id': 0}
+
 for name, info in param_info.items():
     param_list[name] = info(param_list[name])
 if param_list['h'] == 0:
@@ -122,68 +109,48 @@ t_check.sort()
 t_check = t_check[t_check > 0]
 
 model_name = 'model/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id)
+res = {}
+
+if method in ['ot', 'force', 'soft', 'soft_seg']:
+    res['model'] = nn_framework.torch.load(model_name + '_model.pt')
+    res['optimizer'] = nn_framework.torch.load(model_name + '_opt.pt')
+elif method in ['fbsde', 'fbsde_score', 'fb_ot']:
+    res['model_f'] = nn_framework.torch.load(model_name + '_model_f.pt')
+    res['model_b'] = nn_framework.torch.load(model_name + '_model_b.pt')
+    res['optimizer_f'] = nn_framework.torch.load(model_name + '_opt_f.pt')
+    res['optimizer_b'] = nn_framework.torch.load(model_name + '_opt_b.pt')
+elif method in ['mixed']:
+    res['model_drift'] = nn_framework.torch.load(model_name + '_model_drift.pt')
+    res['model_mn'] = nn_framework.torch.load(model_name + '_model_mn.pt')
+    res['optimizer_drift'] = nn_framework.torch.load(model_name + '_opt_drift.pt')
+    res['optimizer_mn'] = nn_framework.torch.load(model_name + '_opt_mn.pt')
+elif method in ['fb_mixed', 'fb_mixed_score']:
+    res['model_f'] = nn_framework.torch.load(model_name + '_model_f.pt')
+    res['model_b'] = nn_framework.torch.load(model_name + '_model_b.pt')
+    res['model_f_mn'] = nn_framework.torch.load(model_name + '_model_f_mn.pt')
+    res['model_b_mn'] = nn_framework.torch.load(model_name + '_model_b_mn.pt')
+    res['optimizer_f'] = nn_framework.torch.load(model_name + '_opt_f.pt')
+    res['optimizer_b'] = nn_framework.torch.load(model_name + '_opt_b.pt')
+    res['optimizer_f_mn'] = nn_framework.torch.load(model_name + '_opt_f_mn.pt')
+    res['optimizer_b_mn'] = nn_framework.torch.load(model_name + '_opt_b_mn.pt')
 
 if method == 'ot':
-    res = nn_framework.train_alg_mfc_ot(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, **param_list)
 elif method == 'force':
-    res = nn_framework.train_alg_mfc_force(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_force(res['model'], x0, T=T, data_full=data, t_check=t_check, plot=True, **param_list)
 elif method == 'soft':
-    res = nn_framework.train_alg_mfc_soft(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, **param_list)
 elif method == 'fbsde':
-    res = nn_framework.train_alg_mfc_fbsde(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, **param_list)
 elif method == 'fbsde_score':
-    res = nn_framework.train_alg_mfc_fbsde(data, T=T, track=True, use_score=True, **param_list)
     res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, **param_list)
 elif method == 'soft_seg':
-    res = nn_framework.train_alg_mfc_soft_seg(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_soft_seg(res['model'], x0, T=T, t_check=t_check, bound=res['bound'], plot=True, **param_list)
 elif method == 'fb_ot':
-    res = nn_framework.train_alg_mfc_fb_ot(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_fb_ot(res, x0, T=T, t_check=t_check, plot=True, **param_list)
 elif method == 'mixed':
-    res = nn_framework.train_alg_mfc_mixed(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, plot=True, **param_list)
 elif method == 'fb_mixed':
-    res = nn_framework.train_alg_mfc_fb_mixed(data, T=T, track=True, **param_list)
     res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
 elif method == 'fb_mixed_score':
-    res = nn_framework.train_alg_mfc_fb_mixed(data, T=T, track=True, use_score=True, **param_list)
     res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
-
-save_name = 'image/sim/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '.png'
-plt.savefig(save_name)
-
-df_name = 'data/sim/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '.csv'
-res_sim.to_csv(df_name)
-
-if save_model:
-    if method in ['ot', 'force', 'soft', 'soft_seg']:
-        nn_framework.torch.save(res['model'], model_name + '_model.pt')
-        nn_framework.torch.save(res['optimizer'], model_name + '_opt.pt')
-    elif method in ['fbsde', 'fbsde_score', 'fb_ot']:
-        nn_framework.torch.save(res['model_f'], model_name + '_model_f.pt')
-        nn_framework.torch.save(res['model_b'], model_name + '_model_b.pt')
-        nn_framework.torch.save(res['optimizer_f'], model_name + '_opt_f.pt')
-        nn_framework.torch.save(res['optimizer_b'], model_name + '_opt_b.pt')
-    elif method in ['mixed']:
-        nn_framework.torch.save(res['model_drift'], model_name + '_model_drift.pt')
-        nn_framework.torch.save(res['model_mn'], model_name + '_model_mn.pt')
-        nn_framework.torch.save(res['optimizer_drift'], model_name + '_opt_drift.pt')
-        nn_framework.torch.save(res['optimizer_mn'], model_name + '_opt_mn.pt')
-    elif method in ['fb_mixed', 'fb_mixed_score']:
-        nn_framework.torch.save(res['model_f'], model_name + '_model_f.pt')
-        nn_framework.torch.save(res['model_b'], model_name + '_model_b.pt')
-        nn_framework.torch.save(res['model_f_mn'], model_name + '_model_f_mn.pt')
-        nn_framework.torch.save(res['model_b_mn'], model_name + '_model_b_mn.pt')
-        nn_framework.torch.save(res['optimizer_f'], model_name + '_opt_f.pt')
-        nn_framework.torch.save(res['optimizer_b'], model_name + '_opt_b.pt')
-        nn_framework.torch.save(res['optimizer_f_mn'], model_name + '_opt_f_mn.pt')
-        nn_framework.torch.save(res['optimizer_b_mn'], model_name + '_opt_b_mn.pt')
-
-# data_all.loc[(data_all.time == 0)|(data_all.time == T)].plot.scatter('x', 'y', xlim=(-10, 40), ylim=(-10, 40), s=1, c='time', cmap='Spectral')
-
-print("--- %s seconds ---" % (time.time() - start_time))
