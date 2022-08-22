@@ -18,6 +18,10 @@ def load(data_name, frac=1, **kwargs):
         data_all.columns = ['x', 'y', 'time']
         data_all[['x']] /= 10000
         data_all[['y']] /= 10000
+    elif data_name == 'moon':
+        data_all = pd.read_csv('data/df_moon.csv', index_col=0)
+        data_all[['x']] *= 100
+        data_all[['y']] *= 100
     elif data_name == 'syn':
         # synthetic data
         cov = np.array([[1, 0], [0, 1]])

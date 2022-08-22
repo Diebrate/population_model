@@ -8,12 +8,12 @@ import load
 import time
 start_time = time.time()
 
-data_name = 'syn'
+data_name = 'wot'
 time_frac = 1
 
 np.random.seed(12345)
 
-use_default = True
+use_default = False
 
 #################################
 if use_default:
@@ -33,13 +33,13 @@ else:
     lock_dist = 0.01
 
     # model setting
-    nt_grid = 250
+    nt_grid = 100
     n_seg = 5
     n_sample = 250
     nt_subgrid = 10
 
     # simulation setting
-    nt = nt_grid
+    nt = 1000
     n_test = 1000
 
     e_s1 = 0.005

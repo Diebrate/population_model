@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import scipy.linalg
+
 import torch
 from torch import nn
 
@@ -19,6 +21,8 @@ def score_est(x, y, h=None):
         h = x.T.cov() * (x.shape[0] ** (-1 / 6))
         # h = x.T.cov() / x.shape[0]
         h = h.detach().numpy()
+    else:
+        h = np.diag([h, h])
     h = np.linalg.inv(h)
     c1 = x[:, 0].reshape(-1, 1) - y[:, 0]
     c2 = x[:, 1].reshape(-1, 1) - y[:, 1]
@@ -32,29 +36,40 @@ def score_est(x, y, h=None):
 
 
 def kernel(x, h=None):
+    c1 = x[:, 0].reshape(-1, 1) - x[:, 0]
+    c2 = x[:, 1].reshape(-1, 1) - x[:, 1]
     if h is None:
         h = x.T.cov() * (x.shape[0] ** (-1 / 6))
         # h = x.T.cov() / x.shape[0]
         h = h.detach().numpy()
-    h = np.linalg.inv(h)
-    c1 = x[:, 0].reshape(-1, 1) - x[:, 0]
-    c2 = x[:, 1].reshape(-1, 1) - x[:, 1]
-    c = h[0, 0] * c1.pow(2) + (h[0, 1] + h[1, 0]) * c1 * c2 + h[1, 1] * c2.pow(2)
-    c = torch.exp(-0.5 * c) / torch.tensor(2 * torch.pi * np.sqrt(h[0, 0] * h[1, 1] - h[0, 1] * h[1, 0]))
+        h = np.linalg.inv(h)
+        c = h[0, 0] * c1.pow(2) + (h[0, 1] + h[1, 0]) * c1 * c2 + h[1, 1] * c2.pow(2)
+        # c = torch.exp(-0.5 * c) * np.sqrt(h[0, 0] * h[1, 1] - h[0, 1] * h[1, 0])/ torch.tensor(2 * torch.pi)
+    else:
+        c = (c1.pow(2) + c2.pow(2)) / h
+    c = torch.exp(-0.5 * c)
     return c.mean(axis=0)
 
 
-def kernel_pred(x, y, h=None):
+def kernel_pred(x, y, h=None, return_cost=False):
+    c1 = x[:, 0].reshape(-1, 1) - y[:, 0]
+    c2 = x[:, 1].reshape(-1, 1) - y[:, 1]
+    if return_cost or (h is not None):
+        cost = c1.pow(2) + c2.pow(2)
     if h is None:
         h = x.T.cov() * (x.shape[0] ** -(1 / 6))
         # h = x.T.cov() / x.shape[0]
         h = h.detach().numpy()
-    h = np.linalg.inv(h)
-    c1 = x[:, 0].reshape(-1, 1) - y[:, 0]
-    c2 = x[:, 1].reshape(-1, 1) - y[:, 1]
-    c = h[0, 0] * c1.pow(2) + (h[0, 1] + h[1, 0]) * c1 * c2 + h[1, 1] * c2.pow(2)
-    c = torch.exp(-0.5 * c) / torch.tensor(2 * torch.pi * np.sqrt(h[0, 0] * h[1, 1] - h[0, 1] * h[1, 0]))
-    return c.mean(axis=0)
+        h = np.linalg.inv(h)
+        c = h[0, 0] * c1.pow(2) + (h[0, 1] + h[1, 0]) * c1 * c2 + h[1, 1] * c2.pow(2)
+        # c = torch.exp(-0.5 * c) *  np.sqrt(h[0, 0] * h[1, 1] - h[0, 1] * h[1, 0])/ torch.tensor(2 * torch.pi)
+    else:
+        c = cost / h
+    c = torch.exp(-0.5 * c)
+    if return_cost:
+        return c.mean(axis=0), cost.T
+    else:
+        return c.mean(axis=0)
 
 
 def kernel_weight(x, y, h=None):
@@ -83,7 +98,7 @@ def train_alg_est_func(nn_model, x, y, lr=0.05, n_iter=1000):
         optimizer.step()
 
 
-def train_alg_mfc_ot(data, T, lr=0.001,
+def train_alg_mfc_ot(data, T, lr=0.001, n_layers=2,
                      n_sample=100, n_iter=128, nt_grid=100,
                      s1=1, s2=1,
                      h=None, k=5, lock_dist=0.01,
@@ -114,7 +129,7 @@ def train_alg_mfc_ot(data, T, lr=0.001,
         # end_loc.append(tmap_norm @ data1)
         end_loc.append(data1[tmap_norm.argmax(axis=1)])
 
-    model = NeuralNetwork(3, 2, 100)
+    model = NeuralNetwork(3, 2, 100, n_layers=n_layers)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
     me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2),
@@ -182,7 +197,7 @@ def train_alg_mfc_ot(data, T, lr=0.001,
     pass
 
 
-def train_alg_mfc_force(data, T, lr=0.001,
+def train_alg_mfc_force(data, T, lr=0.001, n_layers=2,
                         n_sample=100, n_iter=128, nt_grid=100,
                         s1=1, s2=1,
                         h=None,
@@ -198,7 +213,7 @@ def train_alg_mfc_force(data, T, lr=0.001,
     me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2),
                                                                     torch.tensor(np.diag([s1, s2])).float())
 
-    model = NeuralNetwork(3, 2, 100)
+    model = NeuralNetwork(3, 2, 100, n_layers=n_layers)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
     x0 = data[data.time == 0]
@@ -275,7 +290,7 @@ def train_alg_mfc_force(data, T, lr=0.001,
             'cost': obj}
 
 
-def train_alg_mfc_soft(data, T, lr=0.001,
+def train_alg_mfc_soft(data, T, lr=0.001, n_layers=2,
                        n_sample=100, n_iter=128, nt_grid=100,
                        s1=1, s2=1,
                        h=None, k=5, lock_dist=0.01,
@@ -291,7 +306,7 @@ def train_alg_mfc_soft(data, T, lr=0.001,
     me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2),
                                                                     torch.tensor(np.diag([s1, s2])).float())
 
-    model = NeuralNetwork(3, 2, 128)
+    model = NeuralNetwork(3, 2, 128, n_layers=n_layers)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
     x0 = data[data.time == 0]
@@ -318,8 +333,8 @@ def train_alg_mfc_soft(data, T, lr=0.001,
             x = x + v * dt + np.sqrt(dt) * e
             l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
             phat = kernel(x, h=h)
-            pvhat = kernel(v, h=h)
-            l = l + r_ent_v * dt * (pvhat.log().mean())
+            # pvhat = kernel(v, h=h)
+            # l = l + r_ent_v * dt * (pvhat.log().mean())
             if check:
                 if tf == t_data[ind_check]:
                     x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample).to_numpy())
@@ -329,7 +344,7 @@ def train_alg_mfc_soft(data, T, lr=0.001,
                     c = c1.pow(2) + c2.pow(2)
                     # prop_in = torch.diag(1 / c.sum(axis=1)) @ c
                     p = kernel_pred(x_check, x, h=h)
-                    l = l + r_kl * (phat.log() - p.log()).mean()
+                    l = l - r_kl * p.log().mean()
                     c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
                     ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
                     l = l + r_lock * (torch.max(c_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
@@ -356,7 +371,7 @@ def train_alg_mfc_soft(data, T, lr=0.001,
             'cost': obj}
 
 
-def train_alg_mfc_fbsde(data, T, lr=0.001,
+def train_alg_mfc_fbsde(data, T, lr=0.001, n_layers=2,
                         n_sample=100, n_iter=128, nt_grid=100, fb_iter=10,
                         s1=1, s2=1,
                         h=None, k=5, lock_dist=0.01, use_score=False,
@@ -372,8 +387,8 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
     me = torch.distributions.multivariate_normal.MultivariateNormal(torch.zeros(2),
                                                                     torch.tensor(np.diag([s1, s2])).float())
 
-    model_f = NeuralNetwork(3, 2, 128)
-    model_b = NeuralNetwork(3, 2, 128)
+    model_f = NeuralNetwork(3, 2, 128, n_layers=n_layers)
+    model_b = NeuralNetwork(3, 2, 128, n_layers=n_layers)
     optimizer_f = torch.optim.Adam(model_f.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
     optimizer_b = torch.optim.Adam(model_b.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
@@ -411,17 +426,12 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
                     e = me.sample([n_sample])
                     x = x + v * dt + np.sqrt(dt) * e
                     l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
-                    phat = kernel(x, h=h)
                     pvhat = kernel(v, h=h)
                     l = l + r_ent_v * dt * (pvhat.log().mean())
                     if check:
                         if tf == t_data[ind_check]:
                             x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample, replace=True).to_numpy())
-                            # x_support = torch.from_numpy(data.sample(1000)[['x', 'y']].to_numpy())
-                            c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
-                            c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
-                            c = c1.pow(2) + c2.pow(2)
-                            p = kernel_pred(x_check, x, h=h)
+                            p, c = kernel_pred(x_check, x, h=h, return_cost=True)
                             l = l - r_kl * p.log().mean()
                             c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
                             ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
@@ -431,7 +441,9 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
                                 check = False
                             ind_check += 1
                         else:
+                            phat = kernel(x, h=h)
                             l = l + r_ent * dt * (phat.log().mean())
+                            pass
                     if i_fb > 0:
                         x_ref = torch.tensor(x_target[t_ind + 1])
                         l = l + (x - x_ref).pow(2).sum(axis=1).mean()
@@ -498,16 +510,12 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
                     e = me.sample([n_sample])
                     x = x + v * dt + np.sqrt(dt) * e
                     l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
-                    phat = kernel(x, h=h)
                     pvhat = kernel(v, h=h)
                     l = l + r_ent_v * dt * (pvhat.log().mean())
                     if check:
                         if tf == t_data[-(ind_check + 1)]:
                             x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample, replace=True).to_numpy())
-                            c1 = x[:, 0].reshape(-1, 1) - x_check[:, 0]
-                            c2 = x[:, 1].reshape(-1, 1) - x_check[:, 1]
-                            c = c1.pow(2) + c2.pow(2)
-                            p = kernel_pred(x_check, x, h=h)
+                            p, c = kernel_pred(x_check, x, h=h, return_cost=True)
                             l = l - r_kl * p.log().mean()
                             c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
                             ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
@@ -517,8 +525,9 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
                                 check = False
                             ind_check += 1
                         else:
-                            pass
+                            phat = kernel(x, h=h)
                             l = l + r_ent * dt * (phat.log().mean())
+                            pass
                     if i_fb > 0:
                         x_ref = torch.tensor(x_target[t_ind + 1])
                         l = l + (x - x_ref).pow(2).sum(axis=1).mean()
@@ -576,7 +585,7 @@ def train_alg_mfc_fbsde(data, T, lr=0.001,
 
 
 
-def train_alg_mfc_soft_seg(data, T, lr=0.001,
+def train_alg_mfc_soft_seg(data, T, lr=0.001, n_layers=2,
                            n_sample=100, n_iter=128, nt_grid=100, n_seg=5,
                            s1=1, s2=1,
                            h=None, k=5, lock_dist=0.01,
@@ -606,7 +615,7 @@ def train_alg_mfc_soft_seg(data, T, lr=0.001,
     obj = []
 
     for i in range(n_seg):
-        model.append(NeuralNetwork(3, 2, 64))
+        model.append(NeuralNetwork(3, 2, 64, n_layers=n_layers))
         optimizer.append(torch.optim.Adam(model[i].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
         obj.append([])
 
@@ -678,7 +687,7 @@ def train_alg_mfc_soft_seg(data, T, lr=0.001,
             'bound': boundaries}
 
 
-def train_alg_mfc_fb_ot(data, lr=0.001,
+def train_alg_mfc_fb_ot(data, lr=0.001, n_layers=2,
                         n_sample=100, n_iter=128, nt_subgrid=10,
                         s1=1, s2=1,
                         h=None, k=5, lock_dist=0.01,
@@ -718,8 +727,8 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
         tmap_norm.append(tmap_norm_temp)
         # end_loc.append(tmap_norm_temp @ data1)
         # end_loc.append(data1[tmap_norm_temp.argmax(axis=1)])
-        model_f.append(NeuralNetwork(3, 2, 100))
-        model_b.append(NeuralNetwork(3, 2, 100))
+        model_f.append(NeuralNetwork(3, 2, 100, n_layers=n_layers))
+        model_b.append(NeuralNetwork(3, 2, 100, n_layers=n_layers))
         optimizer_f.append(torch.optim.Adam(model_f[i].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
         optimizer_b.append(torch.optim.Adam(model_b[i].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
         obj_f.append([])
@@ -805,7 +814,7 @@ def train_alg_mfc_fb_ot(data, lr=0.001,
             'x1': end_loc}
 
 
-def train_alg_mfc_mixed(data, T, lr=0.001, n_mixed=5,
+def train_alg_mfc_mixed(data, T, lr=0.001, n_mixed=5, n_layers=2,
                         n_sample=100, n_iter=128, nt_grid=100,
                         s1=1, s2=1,
                         h=None, k=5, lock_dist=0.01,
@@ -825,10 +834,10 @@ def train_alg_mfc_mixed(data, T, lr=0.001, n_mixed=5,
     model_list = []
     optimizer_list = []
     for m in range(M):
-        model_list.append(NeuralNetwork(3, 2, 128))
+        model_list.append(NeuralNetwork(3, 2, 128, n_layers=n_layers))
         optimizer_list.append(torch.optim.Adam(model_list[m].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
 
-    model_mn = NeuralNetwork(3, M, 128)
+    model_mn = NeuralNetwork(3, M, 128, n_layers=n_layers)
     optimizer_mn = torch.optim.Adam(model_mn.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
     weight_trans = nn.Softmin(dim=1)
 
@@ -980,7 +989,7 @@ def train_alg_mfc_mixed(data, T, lr=0.001, n_mixed=5,
             'cost': obj}
 
 
-def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
+def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5, n_layers=2,
                            n_sample=100, n_iter=128, nt_grid=100, fb_iter=5,
                            s1=1, s2=1,
                            h=None, k=5, lock_dist=0.01, use_score=False,
@@ -1002,19 +1011,19 @@ def train_alg_mfc_fb_mixed(data, T, lr=0.001, n_mixed=5,
     model_f_list = []
     optimizer_f_list = []
     for m in range(M):
-        model_f_list.append(NeuralNetwork(3, 2, 128))
+        model_f_list.append(NeuralNetwork(3, 2, 128, n_layers=n_layers))
         optimizer_f_list.append(torch.optim.Adam(model_f_list[m].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
 
-    model_f_mn = NeuralNetwork(3, M, 128)
+    model_f_mn = NeuralNetwork(3, M, 128, n_layers=n_layers)
     optimizer_f_mn = torch.optim.Adam(model_f_mn.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
     model_b_list = []
     optimizer_b_list = []
     for m in range(M):
-        model_b_list.append(NeuralNetwork(3, 2, 128))
+        model_b_list.append(NeuralNetwork(3, 2, 128, n_layers=n_layers))
         optimizer_b_list.append(torch.optim.Adam(model_b_list[m].parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5))
 
-    model_b_mn = NeuralNetwork(3, M, 128)
+    model_b_mn = NeuralNetwork(3, M, 128, n_layers=n_layers)
     optimizer_b_mn = torch.optim.Adam(model_b_mn.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-5)
 
     x0 = data[data.time == 0]
@@ -1606,18 +1615,18 @@ def sim_path_mixed(res, x0, T, nt=100, t_check=None, s1=1, s2=1, fb=False, plot=
 
 class NeuralNetwork(nn.Module):
 
-    def __init__(self, d_in, d_out, d_hid):
+    def __init__(self, d_in, d_out, d_hid, n_layers=2):
         super().__init__()
         self.flatten = nn.Flatten()
-        self.flow = nn.Sequential(nn.Linear(d_in, d_hid),
-                                  nn.ReLU(),
-                                  nn.Linear(d_hid, d_hid),
-                                  nn.ReLU(),
-                                  nn.Linear(d_hid, d_hid),
-                                  nn.ReLU(),
-                                  nn.Linear(d_hid, d_out))
+        layers = []
+        layers.append(nn.Linear(d_in, d_hid))
+        layers.append(nn.ReLU())
+        for n in range(n_layers):
+            layers.append(nn.Linear(d_hid, d_hid))
+            layers.append(nn.ReLU())
+        layers.append(nn.Linear(d_hid, d_out))
+        self.flow = nn.Sequential(*layers)
 
     def forward(self, x):
         x = self.flatten(x)
         return self.flow(x.float())
-
