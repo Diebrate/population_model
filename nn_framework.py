@@ -7,7 +7,7 @@ import scipy.linalg
 import torch
 from torch import nn
 
-import ot
+import ot_num
 
 def tensor_cost(x, y):
     c1 = x[:, 0].reshape(-1, 1) - y[:, 0]
@@ -119,10 +119,10 @@ def train_alg_mfc_ot(data, T, lr=0.001, n_layers=2,
     for i in range(nt_data - 1):
         data0 = data[data.time == t_data[i]][['x', 'y']].sample(n_sample, replace=True).to_numpy()
         data1 = data[data.time == t_data[i + 1]][['x', 'y']].sample(n_sample, replace=True).to_numpy()
-        costm = ot.compute_dist(data0, data1, dim=2, single=False)
+        costm = ot_num.compute_dist(data0, data1, dim=2, single=False)
         start_loc.append(data0)
         reg_list = (100 - reg) * np.exp(-np.arange(100)) + reg
-        tmap_temp = ot.ot_unbalanced_log_stabilized(dirac, dirac, costm, reg, reg1, reg2, reg_list=reg_list)
+        tmap_temp = ot_num.ot_unbalanced_log_stabilized(dirac, dirac, costm, reg, reg1, reg2, reg_list=reg_list)
         tmap.append(tmap_temp)
         tmap_norm = tmap_temp.copy()
         tmap_norm = np.diag(1 / tmap_norm.sum(axis=1)) @ tmap_norm
@@ -715,12 +715,12 @@ def train_alg_mfc_fb_ot(data, lr=0.001, n_layers=2,
     for i in range(nt_data - 1):
         data0 = data[data.time == t_data[i]][['x', 'y']].sample(n_ref, replace=True).to_numpy()
         data1 = data[data.time == t_data[i + 1]][['x', 'y']].sample(n_ref, replace=True).to_numpy()
-        costm = ot.compute_dist(data0, data1, dim=2, single=False)
+        costm = ot_num.compute_dist(data0, data1, dim=2, single=False)
         start_loc.append(data0)
         end_loc.append(data1)
         reg_list = (100 - reg) * np.exp(-np.arange(100)) + reg
-        # tmap_temp = ot.ot_unbalanced_log_stabilized(dirac, dirac, costm, reg, reg1, reg2, reg_list=reg_list)
-        tmap_temp = ot.ot_balanced_log_stabilized(dirac, dirac, costm, reg, reg_list=reg_list)
+        # tmap_temp = ot_num.ot_unbalanced_log_stabilized(dirac, dirac, costm, reg, reg1, reg2, reg_list=reg_list)
+        tmap_temp = ot_num.ot_balanced_log_stabilized(dirac, dirac, costm, reg, reg_list=reg_list)
         tmap.append(tmap_temp)
         tmap_norm_temp = tmap_temp.copy()
         tmap_norm_temp = np.diag(1 / tmap_norm_temp.sum(axis=1)) @ tmap_norm_temp

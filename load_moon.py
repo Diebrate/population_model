@@ -5,11 +5,11 @@ import scprep
 
 
 sparse=True
-T1 = scprep.io.load_10X('data/scRNAseq/T0_1A', sparse=sparse, gene_labels='both')
-T2 = scprep.io.load_10X('data/scRNAseq/T2_3B', sparse=sparse, gene_labels='both')
-T3 = scprep.io.load_10X('data/scRNAseq/T4_5C', sparse=sparse, gene_labels='both')
-T4 = scprep.io.load_10X('data/scRNAseq/T6_7D', sparse=sparse, gene_labels='both')
-T5 = scprep.io.load_10X('data/scRNAseq/T8_9E', sparse=sparse, gene_labels='both')
+T1 = scprep.io.load_10X('data/original/scRNAseq/T0_1A', sparse=sparse, gene_labels='both')
+T2 = scprep.io.load_10X('data/original/scRNAseq/T2_3B', sparse=sparse, gene_labels='both')
+T3 = scprep.io.load_10X('data/original/scRNAseq/T4_5C', sparse=sparse, gene_labels='both')
+T4 = scprep.io.load_10X('data/original/scRNAseq/T6_7D', sparse=sparse, gene_labels='both')
+T5 = scprep.io.load_10X('data/original/scRNAseq/T8_9E', sparse=sparse, gene_labels='both')
 
 filtered_batches = []
 for batch in [T1, T2, T3, T4, T5]:

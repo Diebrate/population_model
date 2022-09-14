@@ -7,14 +7,31 @@ import load
 from param import param_info
 import nn_framework
 
-time_frac = 1.0
-data_name = 'root'
-method = 'fbsde_score'
-setting_id = 27
-n_layers = 2
+import ot_num
+import ot
 
-# param_df = pd.read_csv('data/param_multi_setting.csv', index_col=0)
-param_df = pd.read_excel('data/param_multi_setting.xlsx', sheet_name=data_name, index_col=0)
+save_model = True
+use_sys = True
+if use_sys:
+    import sys
+    time_frac = float(sys.argv[1])
+    data_name = str(sys.argv[2])
+    method = str(sys.argv[3])
+    setting_id = int(sys.argv[4])
+    n_layers = int(sys.argv[5])
+    m = int(sys.argv[6])
+else:
+    time_frac = 1.0
+    data_name = 'moon'
+    method = 'soft'
+    setting_id = 10
+    n_layers = 2
+    m = 15
+
+np.random.seed(12345)
+
+# param_df = pd.read_csv('data/setting/param_multi_setting.csv', index_col=0)
+param_df = pd.read_excel('data/setting/param_multi_setting.xlsx', sheet_name=data_name, index_col=0)
 param_list = param_df.iloc[setting_id].to_dict()
 if data_name == 'wot':
     param_list['nt'] = 100
@@ -55,6 +72,7 @@ ind_all = np.random.permutation(np.arange(n))
 
 data = data_all.iloc[ind_all[:n_train]]
 data_test = data_all.iloc[ind_all[n_train:]]
+
 x0 = data_test[data_test.time == 0][['x', 'y']].sample(param_list['n_test'], replace=True).to_numpy()
 
 t_check = data.time.unique()
@@ -62,8 +80,10 @@ t_check.sort()
 t_check = t_check[t_check > 0]
 
 model_name = 'model/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '_l' + str(n_layers)
-model_name = 'model/root/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '_l' + str(n_layers)
+# model_name = 'model/root/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '_l' + str(n_layers)
 res = {}
+
+torch.manual_seed(m)
 
 if method in ['ot', 'force', 'soft', 'soft_seg']:
     res['model'] = nn_framework.torch.load(model_name + '_model.pt')
@@ -108,3 +128,31 @@ elif method == 'fb_mixed':
     res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
 elif method == 'fb_mixed_score':
     res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
+
+if save_model:
+    df_name = 'data/sample/m' + str(m) + '_' + data_name + '_' + method + '_sim_full_id' + str(setting_id) + '_l' + str(n_layers) + '.csv'
+    res_sim.to_csv(df_name)
+    df_test_name = 'data/sample/m' + str(m) + '_' + data_name + '_' + method + '_test_full_id' + str(setting_id) + '_l' + str(n_layers) + '.csv'
+    data_test.to_csv(df_test_name)
+
+# performance evaluation
+
+t_all = data_all.time.unique()
+t_all.sort()
+t_all = t_all[t_all > 0]
+
+nt_eval = len(t_all)
+
+check_loss = False
+
+if check_loss:
+    wass = np.zeros(nt_eval)
+    for ind in range(nt_eval):
+        x_test = res_sim[res_sim.time == t_all[ind]].drop('time', axis=1).to_numpy()
+        x_ref = data_all[data_all.time == t_all[ind]].drop('time', axis=1).to_numpy()
+        cdist = ot_num.compute_dist(x_test, x_ref, dim=2, single=False)
+        px = np.ones(x_test.shape[0]) / x_test.shape[0]
+        py = np.ones(x_ref.shape[0]) / x_ref.shape[0]
+        loss = ot.emd2(px, py, cdist)
+        wass[ind] = loss
+

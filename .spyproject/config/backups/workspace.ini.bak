@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['nn_framework.py', 'mf_model.py', 'ot_model.py', 'mf_sim.py', 'param.py', 'param_multi_setting.py', 'load.py']
+recent_files = ['nn_framework.py', 'ot_num.py', 'mf_model.py', 'ot_model.py', 'mf_sim.py', 'simulation.py', 'evaluation.py', 'wass_eval.py', 'load.py']
 
 [main]
 version = 0.2.0

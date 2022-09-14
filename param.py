@@ -31,7 +31,7 @@ h = np.diag(np.ones(2)) * 1
 lr = 0.001
 n_iter = 100
 
-M = 20
+M = 50 # 50
 
 param_info = {#regularizer
               'r_v': float,

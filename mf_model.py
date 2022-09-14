@@ -21,7 +21,7 @@ if use_sys:
     setting_id = int(sys.argv[4])
     n_layers = int(sys.argv[5])
 else:
-    time_frac = 1
+    time_frac = 1.0
     data_name = 'moon'
     method = 'soft'
     setting_id = 10
@@ -30,8 +30,8 @@ else:
 np.random.seed(12345)
 torch.manual_seed(54321)
 
-# param_df = pd.read_csv('data/param_multi_setting.csv', index_col=0)
-param_df = pd.read_excel('data/param_multi_setting.xlsx', sheet_name=data_name, index_col=0)
+# param_df = pd.read_csv('data/setting/param_multi_setting.csv', index_col=0)
+param_df = pd.read_excel('data/setting/param_multi_setting.xlsx', sheet_name=data_name, index_col=0)
 param_list = param_df.iloc[setting_id].to_dict()
 if setting_id == -1: # default for wot
     param_list = {#regularizer
@@ -136,7 +136,7 @@ if param_list['h'] == 0:
 # else:
 #     param_list['h'] = np.diag(np.ones(2) * param_list['h'])
 param_list['n_layers'] = n_layers
-param_list['n_iter'] = 1000
+# param_list['n_iter'] = 1000
 
 data_all, T = load.load(data_name)
 
@@ -195,34 +195,34 @@ elif method == 'fb_mixed_score':
 
 if save_model:
 
-    save_name = 'image/sim/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '_l' + str(n_layers) + '.png'
+    save_name = 'image/sample/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '_l' + str(n_layers) + '.png'
     plt.savefig(save_name)
 
-    df_name = 'data/sim/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '_l' + str(n_layers) + '.csv'
-    res_sim.to_csv(df_name)
+    df_name = 'data/sample/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '_l' + str(n_layers) + '.csv'
+    # res_sim.to_csv(df_name)
 
     if method in ['ot', 'force', 'soft', 'soft_seg']:
         nn_framework.torch.save(res['model'], model_name + '_model.pt')
-        nn_framework.torch.save(res['optimizer'], model_name + '_opt.pt')
+        # nn_framework.torch.save(res['optimizer'], model_name + '_opt.pt')
     elif method in ['fbsde', 'fbsde_score', 'fb_ot']:
         nn_framework.torch.save(res['model_f'], model_name + '_model_f.pt')
-        nn_framework.torch.save(res['model_b'], model_name + '_model_b.pt')
-        nn_framework.torch.save(res['optimizer_f'], model_name + '_opt_f.pt')
-        nn_framework.torch.save(res['optimizer_b'], model_name + '_opt_b.pt')
+        # nn_framework.torch.save(res['model_b'], model_name + '_model_b.pt')
+        # nn_framework.torch.save(res['optimizer_f'], model_name + '_opt_f.pt')
+        # nn_framework.torch.save(res['optimizer_b'], model_name + '_opt_b.pt')
     elif method in ['mixed']:
         nn_framework.torch.save(res['model_drift'], model_name + '_model_drift.pt')
         nn_framework.torch.save(res['model_mn'], model_name + '_model_mn.pt')
-        nn_framework.torch.save(res['optimizer_drift'], model_name + '_opt_drift.pt')
-        nn_framework.torch.save(res['optimizer_mn'], model_name + '_opt_mn.pt')
+        # nn_framework.torch.save(res['optimizer_drift'], model_name + '_opt_drift.pt')
+        # nn_framework.torch.save(res['optimizer_mn'], model_name + '_opt_mn.pt')
     elif method in ['fb_mixed', 'fb_mixed_score']:
         nn_framework.torch.save(res['model_f'], model_name + '_model_f.pt')
-        nn_framework.torch.save(res['model_b'], model_name + '_model_b.pt')
+        # nn_framework.torch.save(res['model_b'], model_name + '_model_b.pt')
         nn_framework.torch.save(res['model_f_mn'], model_name + '_model_f_mn.pt')
-        nn_framework.torch.save(res['model_b_mn'], model_name + '_model_b_mn.pt')
-        nn_framework.torch.save(res['optimizer_f'], model_name + '_opt_f.pt')
-        nn_framework.torch.save(res['optimizer_b'], model_name + '_opt_b.pt')
-        nn_framework.torch.save(res['optimizer_f_mn'], model_name + '_opt_f_mn.pt')
-        nn_framework.torch.save(res['optimizer_b_mn'], model_name + '_opt_b_mn.pt')
+        # nn_framework.torch.save(res['model_b_mn'], model_name + '_model_b_mn.pt')
+        # nn_framework.torch.save(res['optimizer_f'], model_name + '_opt_f.pt')
+        # nn_framework.torch.save(res['optimizer_b'], model_name + '_opt_b.pt')
+        # nn_framework.torch.save(res['optimizer_f_mn'], model_name + '_opt_f_mn.pt')
+        # nn_framework.torch.save(res['optimizer_b_mn'], model_name + '_opt_b_mn.pt')
 
 # data_all.loc[(data_all.time == 0)|(data_all.time == T)].plot.scatter('x', 'y', xlim=(-10, 40), ylim=(-10, 40), s=1, c='time', cmap='Spectral')
 
