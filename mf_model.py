@@ -11,8 +11,8 @@ from param import param_info
 import time
 start_time = time.time()
 
-save_model = True
-use_sys = True
+save_model = False
+use_sys = False
 if use_sys:
     import sys
     time_frac = float(sys.argv[1])
@@ -22,9 +22,9 @@ if use_sys:
     n_layers = int(sys.argv[5])
 else:
     time_frac = 1.0
-    data_name = 'moon'
-    method = 'soft'
-    setting_id = 10
+    data_name = 'syn'
+    method = 'fbsde_score'
+    setting_id = 50
     n_layers = 2
 
 np.random.seed(12345)

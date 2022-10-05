@@ -10,8 +10,8 @@ import nn_framework
 import ot_num
 import ot
 
-save_model = True
-use_sys = True
+save_model = False
+use_sys = False
 if use_sys:
     import sys
     time_frac = float(sys.argv[1])
@@ -22,11 +22,11 @@ if use_sys:
     m = int(sys.argv[6])
 else:
     time_frac = 1.0
-    data_name = 'moon'
-    method = 'soft'
-    setting_id = 10
+    data_name = 'syn'
+    method = 'fbsde_score'
+    setting_id = 1
     n_layers = 2
-    m = 15
+    m = 0
 
 np.random.seed(12345)
 
@@ -46,6 +46,10 @@ elif data_name == 'root':
 elif data_name == 'moon':
     param_list['nt'] = param_list['nt_grid']
     param_list['n_test'] = 500
+    param_list['s1'] = 0.01
+    param_list['s2'] = 0.01
+elif data_name == 'circle':
+    param_list['nt'] = 50
     param_list['s1'] = 0.01
     param_list['s2'] = 0.01
 
