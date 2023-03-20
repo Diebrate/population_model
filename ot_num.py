@@ -11,7 +11,7 @@ def compute_dist(*data, dim, single=True):
     for d in range(dim):
         costm += np.power(np.subtract.outer(x[:, d], y[:, d]), 2)
     return np.sqrt(costm)
-    
+
 
 def ot_entropy(a, b, costm, reg, n_iter=1000):
     tmap = np.exp(-costm / reg)
@@ -34,7 +34,7 @@ def ot_entropy_uv(a, b, costm, reg, n_iter=1000, fullreturn=True):
                 'K': K}
     else:
         return u, v
-    
+
 
 def ot_sinkdiv(a, b, costm, reg, n_iter=1000):
     K = np.exp(-costm / reg - 1)
@@ -45,7 +45,7 @@ def ot_sinkdiv(a, b, costm, reg, n_iter=1000):
         v = b / (np.transpose(K) @ u)
     return {'tmap': np.multiply(np.diag(u) @ K @ np.diag(v), np.outer(a, b)),
             'uv_dual': (reg * (np.log(u) / a), reg * (np.log(v) / b)),
-            'uv_primal': (u, v)}    
+            'uv_primal': (u, v)}
 
 
 def wasserstein_dual(a, b, costm, reg, n_iter=1000):
@@ -71,7 +71,7 @@ def sink_loss(a, b, costm, reg):
     t_bb = ot_entropy(b, b, costm, reg)
     c = np.sum((t_ab - 0.5 * t_aa - 0.5 * t_bb) * costm)
     return c + reg * np.sum(t_ab * np.log(t_ab) -
-                            0.5 * t_aa * np.log(t_aa) - 
+                            0.5 * t_aa * np.log(t_aa) -
                             0.5 * t_bb * np.log(t_bb))
 
 
@@ -119,7 +119,7 @@ def ot_balanced_log_stabilized(a, b, costm, reg, reg_list, n_iter=1000, tau=50, 
         u, v = update_uv(a, b, costm, r, u, v)
     u, v, a0, b0, K = diag_iter(costm, a, b, u, v, reg, n_iter=n_iter, get_scaling=True)
     return np.diag(a0) @ K @ np.diag(b0)
-    
+
 
 def ot_unbalanced(a, b, costm, reg, reg1, reg2, n_iter=1000):
     K = np.exp(-costm / reg)
@@ -175,7 +175,7 @@ def ot_unbalanced_uv(a, b, costm, reg, reg1, reg2, n_iter=1000):
         u = (a / (K @ v)) ** (reg1 / (reg + reg1))
         v = (b / (np.transpose(K) @ u)) ** (reg2 / (reg + reg2))
     tmap = np.diag(u) @ K @ np.diag(v)
-    return u / np.sqrt(np.sum(tmap)), v / np.sqrt(np.sum(tmap)), tmap / np.sum(tmap) 
+    return u / np.sqrt(np.sum(tmap)), v / np.sqrt(np.sum(tmap)), tmap / np.sum(tmap)
 
 
 def ot_pairwise(x, y, costm=None, bal=True, **kwargs):
@@ -192,7 +192,7 @@ def ot_pairwise(x, y, costm=None, bal=True, **kwargs):
                        [np.zeros(n1), np.ones(n2) / n2],
                        [np.ones(n1)/ n1, np.zeros(n2)],
                        [np.zeros(n1), np.ones(n2) / n2]]).T
-    else: 
+    else:
         p1 = np.block([[x, np.zeros(n2)],
                        [x, np.zeros(n2)],
                        [np.zeros(n1), y],
@@ -243,8 +243,8 @@ def sink_loss_boot_unbalanced(px, py, a, b, costm, reg, reg1, reg2, single=True)
         c = np.sum(t * (m + r * np.log(t)))
         c += r1 * kl_div(np.sum(t, axis=1), pa) + r2 * kl_div(np.sum(t, axis=0), pb)
         return c
-    res_loss = np.array([loss(i, pa, pb, costm, reg, reg1, reg2) - 
-                         0.5 * loss(j, pa, pa, costm, reg, reg1, reg2) - 
+    res_loss = np.array([loss(i, pa, pb, costm, reg, reg1, reg2) -
+                         0.5 * loss(j, pa, pa, costm, reg, reg1, reg2) -
                          0.5 * loss(k, pb, pb, costm, reg, reg1, reg2) for i, j, k, pa, pb in zip(tmap_ab, tmap_aa, tmap_bb, a.transpose(), b.transpose())])
     n_res = len(res_loss)
     ref = sink_loss_unbalanced(px, py, costm, reg, reg1, reg2)
@@ -260,7 +260,7 @@ def sink_loss_balanced(a, b, costm, reg):
     t_bb = ot_entropy(b, b, costm, reg)
     c = np.sum((t_ab - 0.5 * t_aa - 0.5 * t_bb) * costm)
     return c + reg * np.sum(t_ab * np.log(t_ab) -
-                            0.5 * t_aa * np.log(t_aa) - 
+                            0.5 * t_aa * np.log(t_aa) -
                             0.5 * t_bb * np.log(t_bb))
 
 
@@ -275,7 +275,7 @@ def sink_loss_unbalanced(a, b, costm, reg, reg1, reg2):
     t_bb = ot_unbalanced(b, b, costm, reg, reg1, reg2)
     c = np.sum((t_ab - 0.5 * (t_aa + t_bb)) * costm)
     c += (get_entropy(t_ab) - 0.5 * (get_entropy(t_aa) + get_entropy(t_bb))) * reg
-    c += (kl_div(np.sum(t_ab, axis=1), a) - 0.5 * (kl_div(np.sum(t_aa, axis=1), a) + kl_div(np.sum(t_bb, axis=1), b))) * reg1 
+    c += (kl_div(np.sum(t_ab, axis=1), a) - 0.5 * (kl_div(np.sum(t_aa, axis=1), a) + kl_div(np.sum(t_bb, axis=1), b))) * reg1
     c += (kl_div(np.sum(t_ab, axis=0), b) - 0.5 * (kl_div(np.sum(t_aa, axis=0), a) + kl_div(np.sum(t_bb, axis=0), b))) * reg2
     return c
 
@@ -452,8 +452,8 @@ def estimate_growth1(a, b, costm, reg, reg1, reg2, n_iter=1000, single=True, con
             tmap = ot_unbalanced_all_iter(a, b, costm, reg, reg1, reg2)
         zs = [solve_growth(t, a_temp, by_row=True) for t, a_temp in zip(tmap, a.transpose())]
         return np.array(zs)
-    
-    
+
+
 def estimate_growth2(a, b, costm, reg, reg1, reg2, n_iter=1000, single=True, conv=False):
     if single:
         if not conv:
@@ -492,8 +492,8 @@ def sink_loss_balanced_all(a, b, costm, reg, n_iter=1000):
     tmap_bb = ot_balanced_all(b, b, costm, reg)
     def loss(t, m, r):
         return np.sum(t * (m + r * np.log(t)))
-    return np.array([loss(i, costm, reg) - 
-                     0.5 * loss(j, costm, reg) - 
+    return np.array([loss(i, costm, reg) -
+                     0.5 * loss(j, costm, reg) -
                      0.5 * loss(k, costm, reg) for i, j, k in zip(tmap_ab, tmap_aa, tmap_bb)])
 
 
@@ -505,8 +505,8 @@ def sink_loss_unbalanced_all(a, b, costm, reg, reg1, reg2, n_iter=1000):
         c = np.sum(t * (m + r * np.log(t)))
         c += r1 * kl_div(np.sum(t, axis=1), pa) + r2 * kl_div(np.sum(t, axis=0), pb)
         return c
-    return np.array([loss(i, pa, pb, costm, reg, reg1, reg2) - 
-                     0.5 * loss(j, pa, pa, costm, reg, reg1, reg2) - 
+    return np.array([loss(i, pa, pb, costm, reg, reg1, reg2) -
+                     0.5 * loss(j, pa, pa, costm, reg, reg1, reg2) -
                      0.5 * loss(k, pb, pb, costm, reg, reg1, reg2) for i, j, k, pa, pb in zip(tmap_ab, tmap_aa, tmap_bb, a.transpose(), b.transpose())])
 
 
@@ -626,7 +626,7 @@ def loss_unbalanced_cont(x0, x1, reg, reg1, reg2, dim, sink=True):
     else:
         tmap_ab = ot_unbalanced(a, b, costm_ab, reg, reg1, reg2)
         return loss(tmap_ab, a, b, costm_ab, reg, reg1, reg2)
-    
+
 
 def loss_unbalanced_all_local(probs, costm, reg, reg1, reg2, sink=True, win_size=1, weight=None, partial=False):
     T = probs.shape[0] - 1
@@ -639,7 +639,7 @@ def loss_unbalanced_all_local(probs, costm, reg, reg1, reg2, sink=True, win_size
             for j in range(lower, upper + 1):
                 if partial:
                     cost_win[t, j] = loss_unbalanced_partial(probs[t, ], probs[j, ], costm, reg, reg1, reg2, sink=sink)
-                else:    
+                else:
                     cost_win[t, j] = loss_unbalanced(probs[t, ], probs[j, ], costm, reg, reg1, reg2, sink=sink, single=True)
         for t in range(T):
             lower = np.max([0, t - win_size + 1])
@@ -835,8 +835,8 @@ def multimarg_unbalanced_ot(*margs, costm, reg, reg_phi, coeff, n_iter=10, exp_t
         return {'tmap': tmap,
                 'res': res,
                 'loss': loss}
-    
-    
+
+
 def multimarg_unbalanced_ot_all(probs, costm, reg, reg_phi, win_size, coeff=None, n_iter=10, exp_threshold=10):
     T = probs.shape[0] - 1
     res = np.zeros(T)
@@ -858,7 +858,7 @@ def multimarg_unbalanced_ot_all(probs, costm, reg, reg_phi, win_size, coeff=None
         res[t] = multimarg_unbalanced_ot(*margs, costm=costm, reg=reg, reg_phi=reg_phi, coeff=coeff_temp, n_iter=n_iter, exp_threshold=exp_threshold, loss_only=True)
     return res
 
- 
+
 def optimal_lambda(a, b, costm, reg, grid_min, grid_max, step=50):
     def obj_func(t, m, r):
         return np.sum(t * m) + r * np.sum(t * np.log(t))
@@ -905,7 +905,7 @@ def interpolate_weight(a, b, costm, reg, reg1, reg2, h, p0=None, n_conv=1000):
     def loss(t_ab, t_aa, t_bb, pa, pb, costm, reg, reg1, reg2):
         c = np.sum((t_ab - 0.5 * (t_aa + t_bb)) * costm)
         c += get_entropy(t_ab) - 0.5 * (get_entropy(t_aa) + get_entropy(t_bb)) * reg
-        c += (kl_div(np.sum(t_ab, axis=1), pa) - 0.5 * (kl_div(np.sum(t_aa, axis=1), pa) + kl_div(np.sum(t_bb, axis=1), pa)) * reg1) 
+        c += (kl_div(np.sum(t_ab, axis=1), pa) - 0.5 * (kl_div(np.sum(t_aa, axis=1), pa) + kl_div(np.sum(t_bb, axis=1), pa)) * reg1)
         c += (kl_div(np.sum(t_ab, axis=0), pb) - 0.5 * (kl_div(np.sum(t_aa, axis=0), pb) + kl_div(np.sum(t_bb, axis=0), pb)) * reg2)
         return c
     def norm(tmap):
@@ -959,9 +959,9 @@ def compute_otgt_map_balanced(x, y, reg, eta, payoff, n_iter=1000):
     #                    costm - reg * np.log(gt_map),
     #                    reg, n_iter=n_iter)
     reg_list = (100 - reg) * np.exp(-np.arange(30)) + reg
-    tmap = ot_balanced_log_stabilized(np.ones(x.shape[0]) / x.shape[0], 
-                                      np.ones(y.shape[0]) / y.shape[0], 
-                                      costm - reg * np.log(gt_map), 
+    tmap = ot_balanced_log_stabilized(np.ones(x.shape[0]) / x.shape[0],
+                                      np.ones(y.shape[0]) / y.shape[0],
+                                      costm - reg * np.log(gt_map),
                                       reg, reg_list, n_iter=n_iter)
     return tmap
 
@@ -975,13 +975,13 @@ def compute_otgt_map_unbalanced(x, y, reg, reg1, reg2, eta, payoff, n_iter=1000)
     #                    costm - reg * np.log(gt_map),
     #                    reg, n_iter=n_iter)
     reg_list = (100 - reg) * np.exp(-np.arange(30)) + reg
-    tmap = ot_unbalanced_log_stabilized(np.ones(x.shape[0]) / x.shape[0], 
-                                        np.ones(y.shape[0]) / y.shape[0], 
-                                        costm - reg * np.log(gt_map), 
+    tmap = ot_unbalanced_log_stabilized(np.ones(x.shape[0]) / x.shape[0],
+                                        np.ones(y.shape[0]) / y.shape[0],
+                                        costm - reg * np.log(gt_map),
                                         reg, reg1, reg2, reg_list, n_iter=n_iter)
     return tmap
 
-      
+
 # test data 1
 ##################################################
 # pa=np.repeat(1 / 5, 5)

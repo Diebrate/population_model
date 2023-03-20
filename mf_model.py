@@ -20,12 +20,17 @@ if use_sys:
     method = str(sys.argv[3])
     setting_id = int(sys.argv[4])
     n_layers = int(sys.argv[5])
+    if len(sys.argv) > 6:
+        use_gpu = int(sys.argv[6]) == 1
+    else:
+        use_gpu = False
 else:
     time_frac = 1.0
-    data_name = 'syn'
+    data_name = 'circle'
     method = 'fbsde_score'
-    setting_id = 50
+    setting_id = 31
     n_layers = 2
+    use_gpu = True
 
 np.random.seed(12345)
 torch.manual_seed(54321)
@@ -162,36 +167,71 @@ t_check = t_check[t_check > 0]
 
 model_name = 'model/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '_l' + str(n_layers)
 
-if method == 'ot':
-    res = nn_framework.train_alg_mfc_ot(data, T=T, track=True, **param_list)
-    res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, **param_list)
-elif method == 'force':
-    res = nn_framework.train_alg_mfc_force(data, T=T, track=True, **param_list)
-    res_sim = nn_framework.sim_path_force(res['model'], x0, T=T, data_full=data, t_check=t_check, plot=True, **param_list)
-elif method == 'soft':
-    res = nn_framework.train_alg_mfc_soft(data, T=T, track=True, **param_list)
-    res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, **param_list)
-elif method == 'fbsde':
-    res = nn_framework.train_alg_mfc_fbsde(data, T=T, track=True, **param_list)
-    res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, **param_list)
-elif method == 'fbsde_score':
-    res = nn_framework.train_alg_mfc_fbsde(data, T=T, track=True, use_score=True, **param_list)
-    res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, **param_list)
-elif method == 'soft_seg':
-    res = nn_framework.train_alg_mfc_soft_seg(data, T=T, track=True, **param_list)
-    res_sim = nn_framework.sim_path_soft_seg(res['model'], x0, T=T, t_check=t_check, bound=res['bound'], plot=True, **param_list)
-elif method == 'fb_ot':
-    res = nn_framework.train_alg_mfc_fb_ot(data, T=T, track=True, **param_list)
-    res_sim = nn_framework.sim_path_fb_ot(res, x0, T=T, t_check=t_check, plot=True, **param_list)
-elif method == 'mixed':
-    res = nn_framework.train_alg_mfc_mixed(data, T=T, track=True, **param_list)
-    res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, plot=True, **param_list)
-elif method == 'fb_mixed':
-    res = nn_framework.train_alg_mfc_fb_mixed(data, T=T, track=True, **param_list)
-    res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
-elif method == 'fb_mixed_score':
-    res = nn_framework.train_alg_mfc_fb_mixed(data, T=T, track=True, use_score=True, **param_list)
-    res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
+if use_gpu:
+
+    if method == 'ot':
+        res = nn_framework.train_alg_mfc_ot_gpu(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, use_gpu=True, **param_list)
+    elif method == 'force':
+        res = nn_framework.train_alg_mfc_force_gpu(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_force(res['model'], x0, T=T, data_full=data, t_check=t_check, plot=True, use_gpu=True, **param_list)
+    elif method == 'soft':
+        res = nn_framework.train_alg_mfc_soft_gpu(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, use_gpu=True, **param_list)
+    elif method == 'fbsde':
+        res = nn_framework.train_alg_mfc_fbsde_gpu(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, use_gpu=True, **param_list)
+    elif method == 'fbsde_score':
+        res = nn_framework.train_alg_mfc_fbsde_gpu(data, T=T, track=True, use_score=True, **param_list)
+        res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, use_gpu=True, **param_list)
+    elif method == 'soft_seg':
+        res = nn_framework.train_alg_mfc_soft_seg_gpu(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_soft_seg(res['model'], x0, T=T, t_check=t_check, bound=res['bound'], plot=True, use_gpu=True, **param_list)
+    elif method == 'fb_ot':
+        res = nn_framework.train_alg_mfc_fb_ot_gpu(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_fb_ot(res, x0, T=T, t_check=t_check, plot=True, use_gpu=True, **param_list)
+    elif method == 'mixed':
+        res = nn_framework.train_alg_mfc_mixed_gpu(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, plot=True, use_gpu=True, **param_list)
+    elif method == 'fb_mixed':
+        res = nn_framework.train_alg_mfc_fb_mixed_gpu(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, use_gpu=True, **param_list)
+    elif method == 'fb_mixed_score':
+        res = nn_framework.train_alg_mfc_fb_mixed_gpu(data, T=T, track=True, use_score=True, **param_list)
+        res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, use_gpu=True, **param_list)
+
+else:
+
+    if method == 'ot':
+        res = nn_framework.train_alg_mfc_ot(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, **param_list)
+    elif method == 'force':
+        res = nn_framework.train_alg_mfc_force(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_force(res['model'], x0, T=T, data_full=data, t_check=t_check, plot=True, **param_list)
+    elif method == 'soft':
+        res = nn_framework.train_alg_mfc_soft(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, **param_list)
+    elif method == 'fbsde':
+        res = nn_framework.train_alg_mfc_fbsde(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, **param_list)
+    elif method == 'fbsde_score':
+        res = nn_framework.train_alg_mfc_fbsde(data, T=T, track=True, use_score=True, **param_list)
+        res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, **param_list)
+    elif method == 'soft_seg':
+        res = nn_framework.train_alg_mfc_soft_seg(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_soft_seg(res['model'], x0, T=T, t_check=t_check, bound=res['bound'], plot=True, **param_list)
+    elif method == 'fb_ot':
+        res = nn_framework.train_alg_mfc_fb_ot(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_fb_ot(res, x0, T=T, t_check=t_check, plot=True, **param_list)
+    elif method == 'mixed':
+        res = nn_framework.train_alg_mfc_mixed(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, plot=True, **param_list)
+    elif method == 'fb_mixed':
+        res = nn_framework.train_alg_mfc_fb_mixed(data, T=T, track=True, **param_list)
+        res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
+    elif method == 'fb_mixed_score':
+        res = nn_framework.train_alg_mfc_fb_mixed(data, T=T, track=True, use_score=True, **param_list)
+        res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
 
 if save_model:
 

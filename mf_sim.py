@@ -22,9 +22,9 @@ if use_sys:
     m = int(sys.argv[6])
 else:
     time_frac = 1.0
-    data_name = 'syn'
+    data_name = 'circle'
     method = 'fbsde_score'
-    setting_id = 1
+    setting_id = 23
     n_layers = 2
     m = 0
 
