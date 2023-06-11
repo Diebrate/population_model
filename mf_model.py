@@ -26,11 +26,11 @@ if use_sys:
         use_gpu = False
 else:
     time_frac = 1.0
-    data_name = 'circle'
-    method = 'fbsde_score'
-    setting_id = 31
+    data_name = 'root'
+    method = 'soft'
+    setting_id = 10
     n_layers = 2
-    use_gpu = True
+    use_gpu = False
 
 np.random.seed(12345)
 torch.manual_seed(54321)
@@ -141,7 +141,27 @@ if param_list['h'] == 0:
 # else:
 #     param_list['h'] = np.diag(np.ones(2) * param_list['h'])
 param_list['n_layers'] = n_layers
-# param_list['n_iter'] = 1000
+
+param_list['n_iter'] = 1000
+if data_name == 'wot':
+    param_list['nt'] = 100
+    param_list['n_test'] = 200
+    param_list['s1'] = 0.01
+    param_list['s2'] = 0.01
+elif data_name == 'root':
+    param_list['nt'] = param_list['nt_grid']
+    param_list['n_test'] = 200
+    param_list['s1'] = 0.01
+    param_list['s2'] = 0.01
+elif data_name == 'moon':
+    param_list['nt'] = param_list['nt_grid']
+    param_list['n_test'] = 500
+    param_list['s1'] = 0.01
+    param_list['s2'] = 0.01
+elif data_name == 'circle':
+    param_list['nt'] = 50
+    param_list['s1'] = 0.01
+    param_list['s2'] = 0.01
 
 data_all, T = load.load(data_name)
 
@@ -232,6 +252,22 @@ else:
     elif method == 'fb_mixed_score':
         res = nn_framework.train_alg_mfc_fb_mixed(data, T=T, track=True, use_score=True, **param_list)
         res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
+
+# Get the current figure and axes
+fig = plt.gcf()
+ax = plt.gca()
+
+# Create a colorbar using the current plot
+cbar = ax.collections[0].colorbar
+cbar.set_label('time', fontsize=20)
+
+# Modify colorbar properties
+cbar.ax.tick_params(labelsize=18)
+
+# Set axis title and ticklabel font properties
+ax.set_xlabel('x', fontsize=20)
+ax.set_ylabel('y', fontsize=20)
+ax.tick_params(labelsize=18)
 
 if save_model:
 

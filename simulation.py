@@ -14,8 +14,8 @@ from param import param_info
 import time
 start_time = time.time()
 
-save_data = True
-use_sys = True
+save_data = False
+use_sys = False
 if use_sys:
     import sys
     time_frac = float(sys.argv[1])
@@ -173,6 +173,25 @@ elif method == 'stat_ot':
         res_sim = np.vstack((res_sim, x))
     res_sim = np.hstack((res_sim, np.repeat(t_sim, param_list['n_test']).reshape(-1, 1)))
     res_sim = pd.DataFrame(res_sim, columns=['x', 'y', 'time'])
+
+res_sim.plot.scatter(x='x', y='y', c='time', cmap='Spectral', s=1, figsize=(10, 8))
+# plt.savefig(img_name)
+
+# Get the current figure and axes
+fig = plt.gcf()
+ax = plt.gca()
+
+# Create a colorbar using the current plot
+cbar = ax.collections[0].colorbar
+cbar.set_label('time', fontsize=20)
+
+# Modify colorbar properties
+cbar.ax.tick_params(labelsize=18)
+
+# Set axis title and ticklabel font properties
+ax.set_xlabel('x', fontsize=20)
+ax.set_ylabel('y', fontsize=20)
+ax.tick_params(labelsize=18)
 
 df_sim_name = 'data/sim/m' + str(m) + '_' + data_name + '_' + method + '_sim_r' + str(time_frac).replace('.', '_') + '.csv'
 df_test_name = 'data/sim/m' + str(m) + '_' + data_name +  '_' + method + '_test_r' + str(time_frac).replace('.', '_') + '.csv'

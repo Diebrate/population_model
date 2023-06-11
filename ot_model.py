@@ -11,8 +11,8 @@ from param import param_info
 import time
 start_time = time.time()
 
-save_model = True
-use_sys = True
+save_model = False
+use_sys = False
 if use_sys:
     import sys
     time_frac = float(sys.argv[1])
@@ -22,10 +22,10 @@ if use_sys:
     m = int(sys.argv[5])
 else:
     time_frac = 1.0
-    data_name = 'wot'
+    data_name = 'root'
     method = 'disc_ot'
-    setting_id = 4
-    m = 1
+    setting_id = 10
+    m = 0
 
 np.random.seed(12345)
 
@@ -47,6 +47,13 @@ elif data_name == 'moon':
     param_list['n_test'] = 500
     param_list['s1'] = 0.01
     param_list['s2'] = 0.01
+elif data_name == 'circle':
+    param_list['nt'] = 50
+    param_list['s1'] = 0.01
+    param_list['s2'] = 0.01
+
+param_list['nt'] = 1000
+# param_list['n_test'] = 1000
 
 for name, info in param_info.items():
     param_list[name] = info(param_list[name])
@@ -146,6 +153,22 @@ res = pd.DataFrame(res, columns=['x', 'y', 'time'])
 
 res.plot.scatter(x='x', y='y', c='time', cmap='Spectral', s=1, figsize=(10, 8))
 # plt.savefig(img_name)
+
+# Get the current figure and axes
+fig = plt.gcf()
+ax = plt.gca()
+
+# Create a colorbar using the current plot
+cbar = ax.collections[0].colorbar
+cbar.set_label('time', fontsize=20)
+
+# Modify colorbar properties
+cbar.ax.tick_params(labelsize=18)
+
+# Set axis title and ticklabel font properties
+ax.set_xlabel('x', fontsize=20)
+ax.set_ylabel('y', fontsize=20)
+ax.tick_params(labelsize=18)
 
 if save_model:
     df_name = 'data/sample/m' + str(m) + '_' + data_name + '_' + method + '_sim_full_id' + str(setting_id) + '.csv'

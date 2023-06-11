@@ -1,3 +1,7 @@
 wot id 4 n_layers 3
 root id 10 n_layers 2
 moon id 10 n_layers 2
+circ1 id 23 n_layer 2
+circ2 id 22 n_layer 2
+circ3 id 11 n_layer 3
+circ4 id 17 n_layer 2

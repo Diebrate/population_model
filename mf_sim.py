@@ -22,9 +22,9 @@ if use_sys:
     m = int(sys.argv[6])
 else:
     time_frac = 1.0
-    data_name = 'circle'
+    data_name = 'root'
     method = 'fbsde_score'
-    setting_id = 23
+    setting_id = 10
     n_layers = 2
     m = 0
 
@@ -132,6 +132,24 @@ elif method == 'fb_mixed':
     res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
 elif method == 'fb_mixed_score':
     res_sim = nn_framework.sim_path_mixed(res, x0, T=T, t_check=t_check, fb=True, plot=True, **param_list)
+
+import matplotlib.pyplot as plt
+
+# Get the current figure and axes
+fig = plt.gcf()
+ax = plt.gca()
+
+# Create a colorbar using the current plot
+cbar = ax.collections[0].colorbar
+cbar.set_label('time', fontsize=20)
+
+# Modify colorbar properties
+cbar.ax.tick_params(labelsize=18)
+
+# Set axis title and ticklabel font properties
+ax.set_xlabel('x', fontsize=20)
+ax.set_ylabel('y', fontsize=20)
+ax.tick_params(labelsize=18)
 
 if save_model:
     df_name = 'data/sample/m' + str(m) + '_' + data_name + '_' + method + '_sim_full_id' + str(setting_id) + '_l' + str(n_layers) + '.csv'
