@@ -122,7 +122,7 @@ def mnist_scatter(img):
 
 
 def sde_plot(data):
-    sct = data.plot.scatter(x='x', y='y', s=1, c='time', cmap='Spectral', figsize=(8, 6))
+    sct = data.plot.scatter(x='x', y='y', s=1, c='time', cmap='Spectral', figsize=(10, 8))
     cbar = sct.collections[0].colorbar
     sct.set_xlabel('x', fontsize=20)
     sct.set_ylabel('y', fontsize=20)
