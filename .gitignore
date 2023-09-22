@@ -4,3 +4,4 @@
 *.mtx
 .spyproject/
 .idea/
+__pycache__/
