@@ -3,3 +3,4 @@
 *.csv
 *.mtx
 .spyproject/
+.idea/
