@@ -4,14 +4,18 @@ from sklearn.preprocessing import StandardScaler
 import sys
 
 import load
+import nn_framework
+
 
 m = int(sys.argv[1])
 data_name = str(sys.argv[2])
+method = str(sys.argv[3])
 
-data = load.load(data_name, frac=1)
+data, T = load.load(data_name, frac=1)
 
 N = data.shape[0]
 
+nn_framework.torch.manual_seed(m)
 rng = np.random.default_rng(m)
 mask = np.zeros(N)
 mask[rng.choice(np.arange(N), size=int(0.7 * N), replace=False)] = 1
@@ -63,35 +67,28 @@ param_list = {
                 'setting_id': 0
              }
 
-for r_kl in r_kl_list:
-    for r_lock in r_lock_list:
-        for r_ent in r_ent_list:
-            for s in s_list:
-                t_full = data_all.time.unique()
-                t_trim = np.random.choice(t_full, size=int(time_frac * t_full.shape[0]), replace=False)
-                t_trim = np.concatenate(([0], t_trim, [t_full.max()]))
-                t_trim = np.unique(t_trim)
-                t_trim.sort()
-                data_all = data_all[np.isin(data_all.time, t_trim)]
+if data_name == 'wot':
+    param_list['n_layers'] = 3
+elif data_name in ['root', 'moon']:
+    param_list['n_layers'] = 2
 
-                data_all = data_all.sample(frac=0.7, replace=False)
-                n = int(data_all.shape[0])
-                n_train = int(n * 0.9)
-                ind_all = np.random.permutation(np.arange(n))
+for i_kl, r_kl in enumerate(r_kl_list):
+    for i_lock, r_lock in enumerate(r_lock_list):
+        for i_ent, r_ent in enumerate(r_ent_list):
+            for i_s, s in enumerate(s_list):
+                param_list['r_kl'] = r_kl
+                param_list['r_locl'] = r_lock
+                param_list['r_ent'] = r_ent
+                param_list['s1'] = s
+                param_list['s2'] = s
 
-                data = data_all.iloc[ind_all[:n_train]]
-                data_test = data_all.iloc[ind_all[n_train:]]
-                x0 = data_test[data_test.time == 0][['x', 'y']].sample(param_list['n_test'], replace=True).to_numpy()
-
-                t_check = data.time.unique()
-                t_check.sort()
-                t_check = t_check[t_check > 0]
-
-                model_name = 'model/' + data_name + '_' + method + '_t' + str(time_frac).replace('.', '_') + '_sim_id' + str(setting_id) + '_l' + str(n_layers)
+                model_name = f'model/{data_name}_{method}_m{m}_{i_kl}{i_lock}{i_ent}{i_s}.pt'
 
                 if method == 'TrajectoryNet':
                     res = nn_framework.train_alg_mfc_soft_gpu(data, T=T, track=True, **param_list)
-                    res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, use_gpu=True, **param_list)
+                    nn_framework.torch.save(res['model'], model_name)
                 elif method == 'FBSDE':
                     res = nn_framework.train_alg_mfc_fbsde_gpu(data, T=T, track=True, use_score=True, **param_list)
-                    res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, use_gpu=True, **param_list)
+                    nn_framework.torch.save(res['model_f'], model_name)
+
+                print(f'completed r_kl = {r_kl}, r_lock = {r_lock}, r_ent = {r_ent}, s = {s}')
