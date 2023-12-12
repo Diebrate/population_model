@@ -724,7 +724,7 @@ def train_alg_mfc_fbsde(data, T, lr=0.001, n_layers=2,
                         n_sample=100, n_iter=128, nt_grid=100, fb_iter=10,
                         s1=1, s2=1,
                         h=None, k=5, lock_dist=0.01, use_score=False,
-                        r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1,
+                        r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1, beta=1,
                         track=False, **_):
 
     t_data = data.time.unique()
@@ -795,7 +795,7 @@ def train_alg_mfc_fbsde(data, T, lr=0.001, n_layers=2,
                             pass
                     if i_fb > 0:
                         x_ref = torch.tensor(x_target[t_ind + 1])
-                        l = l + (x - x_ref).pow(2).sum(axis=1).mean()
+                        l = l + beta * (x - x_ref).pow(2).sum(axis=1).mean()
 
                 if bool(l.isnan()):
                     raise ArithmeticError('encountered nan at forward iteration ' + str(i_fb) + ' iteration ' + str(int(n)))
@@ -879,7 +879,7 @@ def train_alg_mfc_fbsde(data, T, lr=0.001, n_layers=2,
                             pass
                     if i_fb > 0:
                         x_ref = torch.tensor(x_target[t_ind + 1])
-                        l = l + (x - x_ref).pow(2).sum(axis=1).mean()
+                        l = l + beta * (x - x_ref).pow(2).sum(axis=1).mean()
 
                 if bool(l.isnan()):
                     raise ArithmeticError('encountered nan at backward iteration ' + str(i_fb) + ' iteration ' + str(int(n)))
@@ -937,7 +937,7 @@ def train_alg_mfc_fbsde_gpu(data, T, lr=0.001, n_layers=2,
                             n_sample=100, n_iter=128, nt_grid=100, fb_iter=10,
                             s1=1, s2=1,
                             h=None, k=5, lock_dist=0.01, use_score=False,
-                            r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1,
+                            r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1, beta=1,
                             track=False, **_):
 
     t_data = data.time.unique()
@@ -1008,7 +1008,7 @@ def train_alg_mfc_fbsde_gpu(data, T, lr=0.001, n_layers=2,
                             pass
                     if i_fb > 0:
                         x_ref = torch.tensor(x_target[t_ind + 1]).cuda()
-                        l = l + (x - x_ref).pow(2).sum(axis=1).mean()
+                        l = l + beta * (x - x_ref).pow(2).sum(axis=1).mean()
 
                 if bool(l.isnan()):
                     raise ArithmeticError('encountered nan at forward iteration ' + str(i_fb) + ' iteration ' + str(int(n)))
@@ -1092,7 +1092,7 @@ def train_alg_mfc_fbsde_gpu(data, T, lr=0.001, n_layers=2,
                             pass
                     if i_fb > 0:
                         x_ref = torch.tensor(x_target[t_ind + 1]).cuda()
-                        l = l + (x - x_ref).pow(2).sum(axis=1).mean()
+                        l = l + beta * (x - x_ref).pow(2).sum(axis=1).mean()
 
                 if bool(l.isnan()):
                     raise ArithmeticError('encountered nan at backward iteration ' + str(i_fb) + ' iteration ' + str(int(n)))
