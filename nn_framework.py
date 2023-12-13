@@ -723,7 +723,7 @@ def train_alg_mfc_soft_gpu(data, T, lr=0.001, n_layers=2,
 def train_alg_mfc_fbsde(data, T, lr=0.001, n_layers=2,
                         n_sample=100, n_iter=128, nt_grid=100, fb_iter=10,
                         s1=1, s2=1,
-                        h=None, k=5, lock_dist=0.01, use_score=False,
+                        h=1, k=5, lock_dist=0.01, use_score=False,
                         r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1, beta=1,
                         track=False, **_):
 
@@ -775,8 +775,8 @@ def train_alg_mfc_fbsde(data, T, lr=0.001, n_layers=2,
                     e = me.sample([n_sample])
                     x = x + v * dt + np.sqrt(dt) * e
                     l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
-                    pvhat = kernel(v, h=h)
-                    l = l + r_ent_v * dt * (pvhat.log().mean())
+                    # pvhat = kernel(v, h=h)
+                    # l = l + r_ent_v * dt * (pvhat.log().mean())
                     if check:
                         if tf == t_data[ind_check]:
                             x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample, replace=True).to_numpy())
@@ -859,8 +859,8 @@ def train_alg_mfc_fbsde(data, T, lr=0.001, n_layers=2,
                     e = me.sample([n_sample])
                     x = x + v * dt + np.sqrt(dt) * e
                     l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
-                    pvhat = kernel(v, h=h)
-                    l = l + r_ent_v * dt * (pvhat.log().mean())
+                    # pvhat = kernel(v, h=h)
+                    # l = l + r_ent_v * dt * (pvhat.log().mean())
                     if check:
                         if tf == t_data[-(ind_check + 1)]:
                             x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample, replace=True).to_numpy())
@@ -936,7 +936,7 @@ def train_alg_mfc_fbsde(data, T, lr=0.001, n_layers=2,
 def train_alg_mfc_fbsde_gpu(data, T, lr=0.001, n_layers=2,
                             n_sample=100, n_iter=128, nt_grid=100, fb_iter=10,
                             s1=1, s2=1,
-                            h=None, k=5, lock_dist=0.01, use_score=False,
+                            h=1, k=5, lock_dist=0.01, use_score=False,
                             r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1, beta=1,
                             track=False, **_):
 
@@ -988,8 +988,8 @@ def train_alg_mfc_fbsde_gpu(data, T, lr=0.001, n_layers=2,
                     e = me.sample([n_sample])
                     x = x + v * dt + np.sqrt(dt) * e
                     l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
-                    pvhat = kernel_gpu(v, h=h)
-                    l = l + r_ent_v * dt * (pvhat.log().mean())
+                    # pvhat = kernel_gpu(v, h=h)
+                    # l = l + r_ent_v * dt * (pvhat.log().mean())
                     if check:
                         if tf == t_data[ind_check]:
                             x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample, replace=True).to_numpy()).cuda()
@@ -1072,8 +1072,8 @@ def train_alg_mfc_fbsde_gpu(data, T, lr=0.001, n_layers=2,
                     e = me.sample([n_sample])
                     x = x + v * dt + np.sqrt(dt) * e
                     l = l + r_v * dt * (v.pow(2).sum(axis=1).mean())
-                    pvhat = kernel_gpu(v, h=h)
-                    l = l + r_ent_v * dt * (pvhat.log().mean())
+                    # pvhat = kernel_gpu(v, h=h)
+                    # l = l + r_ent_v * dt * (pvhat.log().mean())
                     if check:
                         if tf == t_data[-(ind_check + 1)]:
                             x_check = torch.from_numpy(data[data.time == tf][['x','y']].sample(n_sample, replace=True).to_numpy()).cuda()
