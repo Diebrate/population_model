@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=def-kdhkdh
 #SBATCH --mem=64G
-#SBATCH --time=0-12:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --job-name=single
 #SBATCH --output=output/%x-%j.out
 

@@ -57,7 +57,7 @@ param_list = {
                 'reg1': 50,
                 'reg2': 50,
                 'k': 5,
-                'lock_dist': 0.1, # 0.01
+                'lock_dist': 0.01, # 0.01
                 # model setting
                 'nt_grid': 200, # 300
                 'n_seg': 5,
@@ -73,7 +73,7 @@ param_list = {
                 'h': 1, # 10
                 # optimization
                 'lr': 0.001,
-                'n_iter': 100,
+                'n_iter': 500,
                 # mc
                 'M': 20,
                 # setting id
@@ -86,7 +86,7 @@ elif data_name in ['root', 'moon']:
     param_list['n_layers'] = 2
 
 if method == 'TrajectoryNet':
-    param_list['n_iter'] = 5000
+    param_list['n_iter'] = 2000
 
 param_list['r_kl'] = r_kl
 param_list['r_locl'] = r_lock

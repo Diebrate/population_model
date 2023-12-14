@@ -67,17 +67,21 @@ for data_name in ['wot', 'root', 'moon']:
 
         nn_framework.torch.manual_seed(m)
         rng = np.random.default_rng(m)
-        mask = np.zeros(N)
-        mask[rng.choice(np.arange(N), size=int(0.7 * N), replace=False)] = 1
-        data_train = data.iloc[mask == 1]
-        data_test = data.iloc[mask == 0]
+        idx = rng.permutation(np.arange(N))
+        idx_train = idx[:int(0.5 * N)]
+        idx_valid = idx[int(0.5 * N):int(0.75 * N)]
+        idx_test = idx[int(0.75 * N):]
+        data_train = data.iloc[idx_train]
+        data_valid = data.iloc[idx_valid]
+        data_test = data.iloc[idx_test]
 
         scaler = StandardScaler()
 
         data_train.loc[:, ['x', 'y']] = scaler.fit_transform(data_train[['x', 'y']])
+        data_valid.loc[:, ['x', 'y']] = scaler.fit_transform(data_valid[['x', 'y']])
         data_test.loc[:, ['x', 'y']] = scaler.fit_transform(data_test[['x', 'y']])
 
-        x0 = data_test[data_test.time == 0][['x', 'y']].sample(param_list['n_test'], replace=True).to_numpy()
+        x0 = data_valid[data_valid.time == 0][['x', 'y']].sample(param_list['n_test'], replace=True).to_numpy()
         t_check = data.time.unique()
         t_check.sort()
         t_check = t_check[t_check > 0]
@@ -98,7 +102,7 @@ for data_name in ['wot', 'root', 'moon']:
                             loss = np.zeros(len(t_check))
                             for i, t in enumerate(t_check):
                                 x_test = res_sim[res_sim.time == t][['x', 'y']].to_numpy()
-                                x_ref = data_test[data_test.time == t][['x', 'y']].to_numpy()
+                                x_ref = data_valid[data_valid.time == t][['x', 'y']].to_numpy()
                                 cdist = ot_num.compute_dist(x_test, x_ref, dim=2, single=False)
                                 cdist_rev = cdist.copy()
                                 px = np.ones(x_test.shape[0]) / x_test.shape[0]
