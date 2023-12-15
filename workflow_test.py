@@ -16,14 +16,18 @@ N = data.shape[0]
 
 nn_framework.torch.manual_seed(m)
 rng = np.random.default_rng(m)
-mask = np.zeros(N)
-mask[rng.choice(np.arange(N), size=int(0.7 * N), replace=False)] = 1
-data_train = data.iloc[mask == 1]
-data_test = data.iloc[mask == 0]
+idx = rng.permutation(np.arange(N))
+idx_train = idx[:int(0.5 * N)]
+idx_valid = idx[int(0.5 * N):int(0.75 * N)]
+idx_test = idx[int(0.75 * N):]
+data_train = data.iloc[idx_train]
+data_valid = data.iloc[idx_valid]
+data_test = data.iloc[idx_test]
 
 scaler = StandardScaler()
 
 data_train.loc[:, ['x', 'y']] = scaler.fit_transform(data_train[['x', 'y']])
+data_valid.loc[:, ['x', 'y']] = scaler.fit_transform(data_valid[['x', 'y']])
 data_test.loc[:, ['x', 'y']] = scaler.fit_transform(data_test[['x', 'y']])
 
 r_kl_list = [1, 5, 10]
@@ -59,7 +63,7 @@ param_list = {
                 'n_sample': 100, # 100
                 'nt_subgrid': 10,
                 'n_mixed': 10,
-                'fb_iter': 20, # 100
+                'fb_iter': 100, # 100
                 # simulation setting
                 'nt': 200,
                 'n_test': 100,
@@ -68,7 +72,7 @@ param_list = {
                 'h': 1, # 10
                 # optimization
                 'lr': 0.001,
-                'n_iter': 100,
+                'n_iter': 20,
                 # mc
                 'M': 20,
                 # setting id
@@ -81,7 +85,7 @@ elif data_name in ['root', 'moon']:
     param_list['n_layers'] = 2
 
 if method == 'TrajectoryNet':
-    param_list['n_iter'] = 1000
+    param_list['n_iter'] = 500
 
 if data_name == 'root':
     param_list['h'] = 1
