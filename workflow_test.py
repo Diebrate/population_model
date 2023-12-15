@@ -8,7 +8,7 @@ import nn_framework
 
 m = 0
 data_name = 'root'
-method = 'FBSDE'
+method = 'TrajectoryNet'
 
 data, T = load.load(data_name, frac=1)
 
@@ -69,10 +69,10 @@ param_list = {
                 'n_test': 100,
                 's1': 0.01,
                 's2': 0.01,
-                'h': 1, # 10
+                'h': 0, # 10
                 # optimization
                 'lr': 0.001,
-                'n_iter': 20,
+                'n_iter': 10,
                 # mc
                 'M': 20,
                 # setting id

@@ -70,7 +70,7 @@ param_list = {
                 'n_test': 100,
                 's1': 0.01,
                 's2': 0.01,
-                'h': 1, # 10
+                'h': 0, # 10
                 # optimization
                 'lr': 0.001,
                 'n_iter': 100,
