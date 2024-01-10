@@ -78,8 +78,8 @@ for data_name in ['wot', 'root', 'moon']:
         scaler = StandardScaler()
 
         data_train.loc[:, ['x', 'y']] = scaler.fit_transform(data_train[['x', 'y']])
-        data_valid.loc[:, ['x', 'y']] = scaler.fit_transform(data_valid[['x', 'y']])
-        data_test.loc[:, ['x', 'y']] = scaler.fit_transform(data_test[['x', 'y']])
+        data_valid.loc[:, ['x', 'y']] = scaler.transform(data_valid[['x', 'y']])
+        data_test.loc[:, ['x', 'y']] = scaler.transform(data_test[['x', 'y']])
 
         x0 = data_valid[data_valid.time == 0][['x', 'y']].sample(param_list['n_test'], replace=True).to_numpy()
         t_check = data.time.unique()

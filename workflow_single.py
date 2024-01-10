@@ -33,8 +33,8 @@ data_test = data.iloc[idx_test]
 scaler = StandardScaler()
 
 data_train.loc[:, ['x', 'y']] = scaler.fit_transform(data_train[['x', 'y']])
-data_valid.loc[:, ['x', 'y']] = scaler.fit_transform(data_valid[['x', 'y']])
-data_test.loc[:, ['x', 'y']] = scaler.fit_transform(data_test[['x', 'y']])
+data_valid.loc[:, ['x', 'y']] = scaler.transform(data_valid[['x', 'y']])
+data_test.loc[:, ['x', 'y']] = scaler.transform(data_test[['x', 'y']])
 
 r_kl_list = [1, 5, 10]
 r_lock_list = [1, 5, 10]
@@ -70,7 +70,7 @@ param_list = {
                 'n_test': 100,
                 's1': 0.01,
                 's2': 0.01,
-                'h': 0, # 10
+                'h': 1, # 10
                 # optimization
                 'lr': 0.001,
                 'n_iter': 100,
