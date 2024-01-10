@@ -95,10 +95,7 @@ for data_name in ['wot', 'root', 'moon']:
 
                         if os.path.exists(model_name):
                             res = nn_framework.torch.load(model_name)
-                            if method == 'TrajectoryNet':
-                                res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=False, use_gpu=False, **param_list)
-                            elif method == 'FBSDE':
-                                res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=False, use_gpu=False, **param_list)
+                            res_sim = nn_framework.sim_path_soft(res, x0, T=T, t_check=t_check, plot=False, use_gpu=False, **param_list)
                             loss = np.zeros(len(t_check))
                             for i, t in enumerate(t_check):
                                 x_test = res_sim[res_sim.time == t][['x', 'y']].to_numpy()
