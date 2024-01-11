@@ -111,6 +111,6 @@ for data_name in ['wot', 'root', 'moon']:
 
 
 print(best_param)
-best_param.to_csv('setting/valid_best_param.csv')
+best_param.to_csv('data/setting/valid_best_param.csv')
                                 
                 
