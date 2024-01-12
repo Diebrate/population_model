@@ -80,10 +80,12 @@ param_list = {
                 'setting_id': 0
              }
 
-if data_name == 'wot':
-    param_list['n_layers'] = 3
-elif data_name in ['root', 'moon']:
-    param_list['n_layers'] = 2
+# if data_name == 'wot':
+#     param_list['n_layers'] = 3
+# elif data_name in ['root', 'moon']:
+#     param_list['n_layers'] = 2
+
+param_list['n_layers'] = 3
 
 if method == 'TrajectoryNet':
     param_list['n_iter'] = 100
