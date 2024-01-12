@@ -65,6 +65,9 @@ for data_name in data_list:
     elif data_name in ['root', 'moon']:
         param_list['n_layers'] = 2
 
+    i_kl, i_lock, i_ent, i_s = [int(i) for i in list(setting_file.loc[data_name, 'FBSDE'][-4:])]
+    r_kl, r_lock, r_ent, s = r_kl_list[i_kl], r_lock_list[i_lock], r_ent_list[i_ent], s_list[i_s]
+
     for method in method_list:
 
         nn_framework.torch.manual_seed(m)
@@ -94,8 +97,8 @@ for data_name in data_list:
 
         if method in ['TrajectoryNet', 'FBSDE']:
 
-            i_kl, i_lock, i_ent, i_s = [int(i) for i in list(setting_file.loc[data_name, method][-4:])]
-            r_kl, r_lock, r_ent, s = r_kl_list[i_kl], r_lock_list[i_lock], r_ent_list[i_ent], s_list[i_s]
+            # i_kl, i_lock, i_ent, i_s = [int(i) for i in list(setting_file.loc[data_name, method][-4:])]
+            # r_kl, r_lock, r_ent, s = r_kl_list[i_kl], r_lock_list[i_lock], r_ent_list[i_ent], s_list[i_s]
 
             model_name = f'model/{data_name}_{method}_m{m}_{i_kl}{i_lock}{i_ent}{i_s}.pt'
 
