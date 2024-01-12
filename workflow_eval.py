@@ -17,10 +17,6 @@ s_list = [0.01, 0.05, 0.1]
 
 setting_file = pd.read_csv('data/setting/valid_best_param.csv', index_col=0)
 
-best_param = pd.DataFrame(index=['wot', 'root', 'moon'], columns=['TrajectoryNet', 'FBSDE'])
-
-perf = {}
-
 param_list = {
                 # regularizer
                 'r_v': 0.1,
@@ -55,7 +51,11 @@ param_list = {
                 'setting_id': 0
              }
 
-for data_name in ['wot', 'root', 'moon']:
+data_list = ['wot', 'root', 'moon']
+method_list = ['TrajectoryNet', 'FBSDE', 'Waddington-OT']
+perf = pd.DataFrame(np.zeros((len(data_list), len(method_list))), index=data_list, columns=method_list)
+
+for data_name in data_list:
 
     data, T = load.load(data_name, frac=1)
     N = data.shape[0]
@@ -65,9 +65,7 @@ for data_name in ['wot', 'root', 'moon']:
     elif data_name in ['root', 'moon']:
         param_list['n_layers'] = 2
 
-    for method in ['TrajectoryNet', 'FBSDE', 'Waddington-OT']:
-
-        obj = np.inf
+    for method in method_list:
 
         nn_framework.torch.manual_seed(m)
         rng = np.random.default_rng(m)
@@ -90,6 +88,8 @@ for data_name in ['wot', 'root', 'moon']:
         t_check.sort()
         t_check = t_check[t_check > 0]
 
+        wass = []
+
         if method in ['TrajectoryNet', 'FBSDE']:
 
             i_kl, i_lock, i_ent, i_s = [int(i) for i in list(setting_file.loc[data_name, method][-4:])]
@@ -98,8 +98,6 @@ for data_name in ['wot', 'root', 'moon']:
             print(f'STARTING---data: {data_name}, method: {method}, r_kl: {r_kl}, r_lock: {r_lock}, r_ent: {r_ent}, s: {s}')
             model_name = f'model/{data_name}_{method}_m{m}_{i_kl}{i_lock}{i_ent}{i_s}.pt'
 
-            wass = []
-
             res = nn_framework.torch.load(model_name)
 
             for _ in range(100):
@@ -107,42 +105,49 @@ for data_name in ['wot', 'root', 'moon']:
                 loss = np.zeros(len(t_check))
                 for i, t in enumerate(t_check):
                     x_test = res_sim[res_sim.time == t][['x', 'y']].to_numpy()
-                    x_ref = data_valid[data_valid.time == t][['x', 'y']].to_numpy()
+                    x_ref = data_test[data_test.time == t][['x', 'y']].to_numpy()
                     cdist = ot_num.compute_dist(x_test, x_ref, dim=2, single=False)
                     cdist_rev = cdist.copy()
                     px = np.ones(x_test.shape[0]) / x_test.shape[0]
                     py = np.ones(x_ref.shape[0]) / x_ref.shape[0]
                     loss[i] = ot.emd2(px, py, cdist)
+                wass.append(loss.mean())
 
         elif method == 'Waddington-OT':
 
-            for i in range(nt_sim - 1):
-        ti = t_sim[i]
-        tf = t_sim[i + 1]
-        if ti == t_trim[ind_check]:
-            d0 = data[data.time == t_trim[ind_check]][['x', 'y']].sample(param_list['n_sample'] * 3, replace=False).to_numpy()
-            d1 = data[data.time == t_trim[ind_check + 1]][['x', 'y']].sample(param_list['n_sample'] * 3, replace=False).to_numpy()
-            costm = ot_num.compute_dist(d0, d1, dim=2, single=False)
-            p0 = np.ones(d0.shape[0]) / d0.shape[0]
-            p1 = np.ones(d1.shape[0]) / d1.shape[0]
-            tmap = ot_num.ot_unbalanced_log_stabilized(p0, p1, costm, param_list['reg'], param_list['reg1'], param_list['reg2'], reg_list)
-            tmap = np.diag(1 / tmap.sum(axis=1)) @ tmap
-            n0 = d0.shape[0]
-            n1 = d1.shape[0]
-            ref_ind = np.zeros(n1)
-            for j in range(n0):
-                ref_ind[j] = np.random.choice(np.arange(n1), p=tmap[j, :])
-            ref_ind = ref_ind.astype(int)
-            cdist = ot_num.compute_dist(x, d0, dim=2, single=False)
-            x_start = x.copy()
-            x_end = d1[ref_ind[cdist.argmin(axis=1)]]
-            t_start = t_trim[ind_check]
-            t_end = t_trim[ind_check + 1]
-            ind_check += 1
-            gamma = (tf - t_start) / (t_end - t_start)
-            x = (1 - gamma) * x_start + gamma * x_end
-            res = np.vstack((res, x))
+            t_all = [0] + t_check
+            num_time = len(t_all)
+            reg = param_list['reg']
+            reg1 = param_list['reg1']
+            reg2 = param_list['reg2']
 
+            for _ in range(100):
+                loss = []
+                for i in range(1, num_time - 1):
+                    t = t_all[i]
+                    ti = t_all[i - 1]
+                    tf = t_all[i + 1]
+                    d0 = data[data_test.time == ti][['x', 'y']].sample(param_list['n_sample'] * 3, replace=False).to_numpy()
+                    d1 = data[data_test.time == tf][['x', 'y']].sample(param_list['n_sample'] * 3, replace=False).to_numpy()
+                    costm = ot_num.compute_dist(d0, d1, dim=2, single=False)
+                    p0 = np.ones(d0.shape[0]) / d0.shape[0]
+                    p1 = np.ones(d1.shape[0]) / d1.shape[0]
+                    tmap = ot_num.ot_unbalanced(p0, p1, costm, reg, reg1, reg2)
+                    nd0 = d0.shape[0]
+                    nd1 = d1.shape[0]
+                    ind_pair = np.random.choice(np.arange(nd0 * nd1), size=param_list['n_sample'], replace=True, p=tmap.flatten())
+                    x_start = d0[ind_pair // nd1]
+                    x_end = d1[ind_pair % nd1]
+                    gamma = (t - ti) / (tf - ti)
+                    x_test = (1 - gamma) * x_start + gamma * x_end
+                    x_ref = data_test[data_test.time == t][['x', 'y']].to_numpy()
+                    cdist = ot_num.compute_dist(x_test, x_ref, dim=2, single=False)
+                    cdist_rev = cdist.copy()
+                    px = np.ones(x_test.shape[0]) / x_test.shape[0]
+                    py = np.ones(x_ref.shape[0]) / x_ref.shape[0]
+                    loss.append(ot.emd2(px, py, cdist))
+                wass.append(np.mean(loss))
 
-print(best_param)
-best_param.to_csv('data/setting/valid_best_param.csv')
+        perf.loc[data_name, method] = f'{np.nanmean(wass):.3f} +- {np.nanstd(wass):.3f}'
+
+perf.to_csv('data/eval/valid_summary.csv')
