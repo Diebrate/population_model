@@ -70,7 +70,7 @@ param_list = {
                 'n_test': 100,
                 's1': 0.01,
                 's2': 0.01,
-                'h': 1, # 10
+                'h': 0.1, # 10
                 # optimization
                 'lr': 0.001,
                 'n_iter': 100,
@@ -86,7 +86,7 @@ elif data_name in ['root', 'moon']:
     param_list['n_layers'] = 2
 
 if method == 'TrajectoryNet':
-    param_list['n_iter'] = 1000
+    param_list['n_iter'] = 100
 
 param_list['r_kl'] = r_kl
 param_list['r_locl'] = r_lock
