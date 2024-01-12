@@ -90,12 +90,13 @@ for data_name in data_list:
 
         wass = []
 
+        print(f'STARTING---------data: {data_name}, method: {method}---------')
+
         if method in ['TrajectoryNet', 'FBSDE']:
 
             i_kl, i_lock, i_ent, i_s = [int(i) for i in list(setting_file.loc[data_name, method][-4:])]
             r_kl, r_lock, r_ent, s = r_kl_list[i_kl], r_lock_list[i_lock], r_ent_list[i_ent], s_list[i_s]
 
-            print(f'STARTING---data: {data_name}, method: {method}, r_kl: {r_kl}, r_lock: {r_lock}, r_ent: {r_ent}, s: {s}')
             model_name = f'model/{data_name}_{method}_m{m}_{i_kl}{i_lock}{i_ent}{i_s}.pt'
 
             res = nn_framework.torch.load(model_name)
@@ -127,8 +128,8 @@ for data_name in data_list:
                     t = t_all[i]
                     ti = t_all[i - 1]
                     tf = t_all[i + 1]
-                    d0 = data[data_test.time == ti][['x', 'y']].sample(param_list['n_sample'] * 3, replace=False).to_numpy()
-                    d1 = data[data_test.time == tf][['x', 'y']].sample(param_list['n_sample'] * 3, replace=False).to_numpy()
+                    d0 = data_test[data_test.time == ti][['x', 'y']].sample(param_list['n_sample'] * 3, replace=False).to_numpy()
+                    d1 = data_test[data_test.time == tf][['x', 'y']].sample(param_list['n_sample'] * 3, replace=False).to_numpy()
                     costm = ot_num.compute_dist(d0, d1, dim=2, single=False)
                     p0 = np.ones(d0.shape[0]) / d0.shape[0]
                     p1 = np.ones(d1.shape[0]) / d1.shape[0]
