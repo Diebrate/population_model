@@ -24,9 +24,9 @@ param_list = {
                 'r_ent_v' : 0,
                 'r_kl': 5, # 5
                 'r_lock': 10, # 10
-                'reg': 0.01,
-                'reg1': 50,
-                'reg2': 50,
+                'reg': 1,
+                'reg1': 1,
+                'reg2': 1,
                 'k': 5,
                 'lock_dist': 0.1, # 0.01
                 # model setting
@@ -131,8 +131,8 @@ for data_name in data_list:
                     t = t_all[i]
                     ti = t_all[i - 1]
                     tf = t_all[i + 1]
-                    d0 = data_test[data_test.time == ti][['x', 'y']].sample(param_list['n_sample'] * 3, replace=False).to_numpy()
-                    d1 = data_test[data_test.time == tf][['x', 'y']].sample(param_list['n_sample'] * 3, replace=False).to_numpy()
+                    d0 = data_train[data_train.time == ti][['x', 'y']].sample(param_list['n_sample'], replace=False).to_numpy()
+                    d1 = data_train[data_train.time == tf][['x', 'y']].sample(param_list['n_sample'], replace=False).to_numpy()
                     costm = ot_num.compute_dist(d0, d1, dim=2, single=False)
                     p0 = np.ones(d0.shape[0]) / d0.shape[0]
                     p1 = np.ones(d1.shape[0]) / d1.shape[0]
