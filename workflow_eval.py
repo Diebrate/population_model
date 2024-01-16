@@ -131,8 +131,8 @@ for data_name in data_list:
                     t = t_all[i]
                     # ti = t_all[i - 1]
                     # tf = t_all[i + 1]
-                    ti = t_all[max(0, i - 3)]
-                    tf = t_all[min(num_time - 1, i + 3)]
+                    ti = t_all[max(0, i - 5)]
+                    tf = t_all[min(num_time - 1, i + 5)]
                     d0 = data_test[data_test.time == ti][['x', 'y']].sample(param_list['n_sample'], replace=False).to_numpy()
                     d1 = data_test[data_test.time == tf][['x', 'y']].sample(param_list['n_sample'], replace=False).to_numpy()
                     costm = ot_num.compute_dist(d0, d1, dim=2, single=False)
