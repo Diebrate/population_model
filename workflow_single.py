@@ -112,6 +112,11 @@ elif method == 'FBSDE':
     res = nn_framework.train_alg_mfc_fbsde(data_train, T=T, track=True, use_score=True, **param_list)
     nn_framework.torch.save(res['model_f'], model_name)
     res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, use_gpu=False, **param_list)
+elif method == 'FBSDE_minus':
+    param_list['r_lock'] = 0
+    res = nn_framework.train_alg_mfc_fbsde(data_train, T=T, track=True, use_score=True, **param_list)
+    nn_framework.torch.save(res['model_f'], model_name)
+    res_sim = nn_framework.sim_path_soft(res['model_f'], x0, T=T, t_check=t_check, plot=True, use_gpu=False, **param_list)
 
 # Get the current figure and axes
 fig = plt.gcf()
