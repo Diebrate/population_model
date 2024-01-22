@@ -13,6 +13,18 @@ def compute_dist(*data, dim, single=True):
     return np.sqrt(costm)
 
 
+def ot_quadratic(a, b, costm, reg, n_iter=2500):
+    da, db = len(a), len(b)
+    alpha = np.ones(da) * costm.max()
+    beta = np.ones(db) * costm.max()
+    for i in range(n_iter):
+        pi = alpha.reshape(da, 1) + beta.reshape(1, db) - costm
+        pi = np.maximum(pi, 0)
+        alpha = alpha - 0.1 * (pi.sum(axis=1) - reg * a) / np.sum(pi > 0, axis=1)
+        beta = beta - 0.1 * (pi.sum(axis=0) - reg * b) / np.sum(pi > 0, axis=0)
+    return pi / reg
+
+
 def ot_entropy(a, b, costm, reg, n_iter=1000):
     tmap = np.exp(-costm / reg)
     for i in range(n_iter):
