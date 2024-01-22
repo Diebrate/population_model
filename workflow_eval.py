@@ -52,7 +52,7 @@ param_list = {
              }
 
 data_list = ['wot', 'root', 'moon']
-method_list = ['FBSDE', 'FBSDE_minus', 'TrajectoryNet', 'Waddington-OT']
+method_list = ['FBSDE', 'FBSDE_minus', 'TrajectoryNet', 'Waddington-OT', 'Stationary-OT']
 perf = pd.DataFrame(np.zeros((len(data_list), len(method_list))), index=data_list, columns=method_list)
 
 for data_name in data_list:
@@ -139,6 +139,43 @@ for data_name in data_list:
                     p0 = np.ones(d0.shape[0]) / d0.shape[0]
                     p1 = np.ones(d1.shape[0]) / d1.shape[0]
                     tmap = ot_num.ot_unbalanced(p0, p1, costm, reg, reg1, reg2)
+                    nd0 = d0.shape[0]
+                    nd1 = d1.shape[0]
+                    ind_pair = np.random.choice(np.arange(nd0 * nd1), size=param_list['n_sample'], replace=True, p=tmap.flatten())
+                    x_start = d0[ind_pair // nd1]
+                    x_end = d1[ind_pair % nd1]
+                    gamma = (t - ti) / (tf - ti)
+                    x_test = (1 - gamma) * x_start + gamma * x_end
+                    x_ref = data_test[data_test.time == t][['x', 'y']].to_numpy()
+                    cdist = ot_num.compute_dist(x_test, x_ref, dim=2, single=False)
+                    cdist_rev = cdist.copy()
+                    px = np.ones(x_test.shape[0]) / x_test.shape[0]
+                    py = np.ones(x_ref.shape[0]) / x_ref.shape[0]
+                    loss.append(ot.emd2(px, py, cdist))
+                wass.append(np.mean(loss))
+        
+        elif method == 'Stationary-OT':
+
+            t_all = [0] + t_check
+            num_time = len(t_all)
+            reg = param_list['reg']
+            reg1 = param_list['reg1']
+            reg2 = param_list['reg2']
+
+            for _ in range(100):
+                loss = []
+                for i in range(1, num_time - 1):
+                    t = t_all[i]
+                    # ti = t_all[i - 1]
+                    # tf = t_all[i + 1]
+                    ti = t_all[max(0, i - 5)]
+                    tf = t_all[min(num_time - 1, i + 5)]
+                    d0 = data_test[data_test.time == ti][['x', 'y']].sample(param_list['n_sample'], replace=False).to_numpy()
+                    d1 = data_test[data_test.time == tf][['x', 'y']].sample(param_list['n_sample'], replace=False).to_numpy()
+                    costm = ot_num.compute_dist(d0, d1, dim=2, single=False)
+                    p0 = np.ones(d0.shape[0]) / d0.shape[0]
+                    p1 = np.ones(d1.shape[0]) / d1.shape[0]
+                    tmap = ot_num.ot_quadratic(p0, p1, costm, reg)
                     nd0 = d0.shape[0]
                     nd1 = d1.shape[0]
                     ind_pair = np.random.choice(np.arange(nd0 * nd1), size=param_list['n_sample'], replace=True, p=tmap.flatten())

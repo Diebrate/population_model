@@ -20,9 +20,10 @@ def ot_quadratic(a, b, costm, reg, n_iter=2500):
     for i in range(n_iter):
         pi = alpha.reshape(da, 1) + beta.reshape(1, db) - costm
         pi = np.maximum(pi, 0)
-        alpha = alpha - 0.1 * (pi.sum(axis=1) - reg * a) / np.sum(pi > 0, axis=1)
-        beta = beta - 0.1 * (pi.sum(axis=0) - reg * b) / np.sum(pi > 0, axis=0)
-    return pi / reg
+        alpha = alpha - 0.1 * (pi.sum(axis=1) - reg * a)
+        beta = beta - 0.1 * (pi.sum(axis=0) - reg * b)
+    tmap = pi / reg
+    return tmap / tmap.sum()
 
 
 def ot_entropy(a, b, costm, reg, n_iter=1000):
@@ -992,6 +993,17 @@ def compute_otgt_map_unbalanced(x, y, reg, reg1, reg2, eta, payoff, n_iter=1000)
                                         costm - reg * np.log(gt_map),
                                         reg, reg1, reg2, reg_list, n_iter=n_iter)
     return tmap
+
+
+def dgp(d1, d2):
+    a = np.random.uniform(0, 1, d1)
+    b = np.random.uniform(0, 1, d2)
+    a = a / np.sum(a)
+    b = b / np.sum(b)
+    x = np.random.normal(0, 1, d1)
+    y = np.random.normal(0, 1, d2)
+    costm = (x.reshape(-1, 1) - y.reshape(1, -1)) ** 2
+    return a, b, costm
 
 
 # test data 1
