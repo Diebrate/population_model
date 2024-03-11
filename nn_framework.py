@@ -562,7 +562,7 @@ def train_alg_mfc_soft(data, T, lr=0.001, n_layers=2,
                        n_sample=100, n_iter=128, nt_grid=100,
                        s1=1, s2=1,
                        h=None, k=5, lock_dist=0.01,
-                       r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock=1,
+                       r_v=0.01, r_ent=0.1, r_kl=1, r_ent_v=1, r_lock1=1, r_lock2=1,
                        track=False, **_):
 
     t_data = data.time.unique()
@@ -615,8 +615,8 @@ def train_alg_mfc_soft(data, T, lr=0.001, n_layers=2,
                     l = l - r_kl * p.log().mean()
                     c_lowk, c_rank = c.topk(k=k, dim=1, largest=False)
                     ctr_lowk, ctr_rank = c.topk(k=k, dim=0, largest=False)
-                    l = l + r_lock * (torch.max(c_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
-                    l = l + r_lock * (torch.max(ctr_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
+                    l = l + r_lock1 * (torch.max(c_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=1).mean()
+                    l = l + r_lock2 * (torch.max(ctr_lowk.sqrt() - lock_dist, torch.tensor(0.))).sum(axis=0).mean()
                     if tf == t_data[-1]:
                         check = False
                     ind_check += 1

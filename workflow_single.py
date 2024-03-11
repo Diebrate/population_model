@@ -91,7 +91,7 @@ if method == 'TrajectoryNet':
     param_list['n_iter'] = 100
 
 param_list['r_kl'] = r_kl
-param_list['r_locl'] = r_lock
+param_list['r_lock'] = r_lock
 param_list['r_ent'] = r_ent
 param_list['s1'] = s
 param_list['s2'] = s
@@ -105,6 +105,14 @@ t_check.sort()
 t_check = t_check[t_check > 0]
 
 if method == 'TrajectoryNet':
+    param_list['r_lock1'] = param_list['r_lock']
+    param_list['r_lock2'] = 0
+    res = nn_framework.train_alg_mfc_soft(data_train, T=T, track=True, **param_list)
+    nn_framework.torch.save(res['model'], model_name)
+    res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, use_gpu=False, **param_list)
+elif method == 'TrajectoryNet_plus':
+    param_list['r_lock1'] = param_list['r_lock']
+    param_list['r_lock2'] = param_list['r_lock']
     res = nn_framework.train_alg_mfc_soft(data_train, T=T, track=True, **param_list)
     nn_framework.torch.save(res['model'], model_name)
     res_sim = nn_framework.sim_path_soft(res['model'], x0, T=T, t_check=t_check, plot=True, use_gpu=False, **param_list)

@@ -52,7 +52,7 @@ param_list = {
              }
 
 data_list = ['wot', 'root', 'moon']
-method_list = ['FBSDE', 'FBSDE_minus', 'TrajectoryNet', 'Waddington-OT', 'Stationary-OT']
+method_list = ['FBSDE', 'FBSDE_minus', 'TrajectoryNet', 'Trajectory_plus', 'Waddington-OT', 'Stationary-OT']
 perf = pd.DataFrame(np.zeros((len(data_list), len(method_list))), index=data_list, columns=method_list)
 
 for data_name in data_list:
@@ -95,7 +95,7 @@ for data_name in data_list:
 
         print(f'STARTING---------data: {data_name}, method: {method}---------')
 
-        if method in ['TrajectoryNet', 'FBSDE', 'FBSDE_minus']:
+        if method in ['TrajectoryNet', 'FBSDE', 'FBSDE_minus', 'TrajectoryNet_plus']:
 
             # i_kl, i_lock, i_ent, i_s = [int(i) for i in list(setting_file.loc[data_name, method][-4:])]
             # r_kl, r_lock, r_ent, s = r_kl_list[i_kl], r_lock_list[i_lock], r_ent_list[i_ent], s_list[i_s]

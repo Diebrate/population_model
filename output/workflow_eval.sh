@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=def-kdhkdh
 #SBATCH --mem=32G
-#SBATCH --time=0-06:00:00
+#SBATCH --time=0-12:00:00
 #SBATCH --job-name=eval
 #SBATCH --output=output/%x-%j.out
 #SBATCH --mail-user=kevinkw.zhang@mail.utoronto.ca
