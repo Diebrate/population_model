@@ -52,7 +52,7 @@ param_list = {
              }
 
 data_list = ['wot', 'root', 'moon']
-method_list = ['FBSDE', 'FBSDE_minus', 'TrajectoryNet', 'Trajectory_plus', 'Waddington-OT', 'Stationary-OT']
+method_list = ['FBSDE', 'FBSDE_minus', 'TrajectoryNet', 'TrajectoryNet_plus', 'Waddington-OT', 'Stationary-OT']
 perf = pd.DataFrame(np.zeros((len(data_list), len(method_list))), index=data_list, columns=method_list)
 
 for data_name in data_list:
